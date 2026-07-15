@@ -634,7 +634,11 @@ function parseModelJson(data) {
   // be tolerant of any stray text around the JSON object
   const first = clean.indexOf("{");
   const last = clean.lastIndexOf("}");
-  if (first === -1 || last === -1) throw new Error("Couldn't read the caption from the response — try again.");
+  if (first === -1 || last === -1) {
+    throw new Error(
+      `Couldn't read the caption from the response${data.stop_reason ? ` (stopped: ${data.stop_reason})` : ""} — try again.`
+    );
+  }
   return JSON.parse(clean.slice(first, last + 1));
 }
 

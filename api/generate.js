@@ -83,24 +83,44 @@ export default async function handler(req, res) {
   });
 
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY, // set in Vercel env, never in code
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-5",
-        max_tokens: 2000,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content }],
-        // Server-side web search — Anthropic runs the searches, no tool loop needed.
-        tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }],
-      }),
-    });
-    const data = await r.json();
-    return res.status(r.ok ? 200 : r.status).json(data);
+    // The web-search loop can pause mid-turn (stop_reason "pause_turn") —
+    // re-send the conversation so Claude carries on until the caption is done.
+    let messages = [{ role: "user", content }];
+    let data;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": process.env.ANTHROPIC_API_KEY, // set in Vercel env, never in code
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-5",
+          max_tokens: 4000,
+          system: SYSTEM_PROMPT,
+          messages,
+          // Server-side web search — Anthropic runs the searches.
+          tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }],
+        }),
+      });
+      data = await r.json();
+      if (!r.ok) return res.status(r.status).json(data);
+      if (data.stop_reason === "pause_turn") {
+        messages = [
+          { role: "user", content },
+          { role: "assistant", content: data.content },
+        ];
+        continue;
+      }
+      break;
+    }
+    if (data.stop_reason === "max_tokens") {
+      return res.status(502).json({
+        error: "The caption ran out of writing room — hit generate again.",
+      });
+    }
+    return res.status(200).json(data);
   } catch (err) {
     return res.status(500).json({ error: String(err) });
   }
