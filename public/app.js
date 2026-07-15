@@ -565,6 +565,7 @@ generateBtn.addEventListener("click", async () => {
   generateBtn.disabled = true;
   progressEl.hidden = false;
   progress.set(0, "starting…");
+  document.body.classList.add("generating"); // cue the light show
 
   try {
     // 1–3. video stages (only when a file was dropped)
@@ -623,6 +624,7 @@ generateBtn.addEventListener("click", async () => {
     etaEl.textContent = "Error — try again";
     showError(String(e.message || e));
   } finally {
+    document.body.classList.remove("generating");
     generateBtn.disabled = false;
     setTimeout(() => (progressEl.hidden = true), 1500);
   }
@@ -697,6 +699,7 @@ async function sendFeedback() {
   sendFeedbackBtn.disabled = true;
   generateBtn.disabled = true;
   progressEl.hidden = false;
+  document.body.classList.add("generating"); // cue the light show
   progress.creep(0, 0.95, getEta(lastRun.runMode), () => "rewriting with your note…");
 
   try {
@@ -715,6 +718,7 @@ async function sendFeedback() {
     etaEl.textContent = "Error — try again";
     showError(String(e.message || e));
   } finally {
+    document.body.classList.remove("generating");
     sendFeedbackBtn.disabled = false;
     generateBtn.disabled = false;
     setTimeout(() => (progressEl.hidden = true), 1500);

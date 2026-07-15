@@ -24,6 +24,93 @@ body {
   line-height: 1.55;
 }
 
+/* Generating light show — cascading LFG colours, drifting glows, moving
+   pattern. Lives behind everything and only appears while working. */
+.bg-fx {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+  pointer-events: none;
+  overflow: hidden;
+}
+body.generating .bg-fx { opacity: 1; }
+
+/* colour wash cascading down the screen through the brand palette */
+.bg-fx .wash {
+  position: absolute;
+  inset: -20%;
+  background: linear-gradient(
+    180deg,
+    var(--yellow),
+    var(--orange),
+    var(--blue),
+    var(--cream),
+    var(--yellow)
+  );
+  background-size: 100% 400%;
+  opacity: 0.3;
+  animation: cascade 9s linear infinite;
+}
+@keyframes cascade {
+  from { background-position: 0 0; }
+  to { background-position: 0 -400%; }
+}
+
+/* soft drifting glows */
+.bg-fx .glow {
+  position: absolute;
+  width: 65vmax;
+  height: 65vmax;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.55;
+}
+.glow-orange {
+  background: radial-gradient(circle, rgba(254, 85, 0, 0.8), transparent 62%);
+  top: -25vmax;
+  left: -15vmax;
+  animation: drift-a 11s ease-in-out infinite alternate;
+}
+.glow-blue {
+  background: radial-gradient(circle, rgba(121, 202, 196, 0.9), transparent 62%);
+  bottom: -28vmax;
+  right: -18vmax;
+  animation: drift-b 13s ease-in-out infinite alternate;
+}
+.glow-yellow {
+  background: radial-gradient(circle, rgba(238, 153, 68, 0.8), transparent 62%);
+  top: 20vh;
+  left: 30vw;
+  animation: drift-c 9s ease-in-out infinite alternate;
+}
+@keyframes drift-a { to { transform: translate(35vw, 25vh) scale(1.2); } }
+@keyframes drift-b { to { transform: translate(-30vw, -20vh) scale(1.15); } }
+@keyframes drift-c { to { transform: translate(-20vw, 25vh) scale(0.85); } }
+
+/* sliding diagonal stripe pattern, echoing the brand bars */
+.bg-fx .pattern {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    -45deg,
+    rgba(0, 0, 0, 0.045) 0 14px,
+    transparent 14px 44px
+  );
+  animation: pattern-slide 2.6s linear infinite;
+}
+@keyframes pattern-slide {
+  to { background-position: 62px 62px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bg-fx .wash, .bg-fx .glow, .bg-fx .pattern { animation: none; }
+}
+
+/* page content sits above the light show */
+.motif, .layout { position: relative; z-index: 1; }
+
 /* Graphical motif — progressing bars, as on the brand sheet */
 .motif { display: flex; flex-direction: column; gap: 4px; padding-top: 0; }
 .motif .bar { height: 10px; }
