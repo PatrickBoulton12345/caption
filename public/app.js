@@ -685,7 +685,18 @@ function renderResult(result, searchedPages = [], runMode = "story") {
   currentTopic = result.topic || "other";
   hashtagsAdded = false;
 
-  captionEl.value = result.caption || "";
+  // Instagram-ready spacing: if the caption arrived as one blob, break it
+  // into short paragraphs (every couple of sentences) with blank lines
+  let caption = (result.caption || "").trim();
+  if (caption && !caption.includes("\n")) {
+    const sentences = caption.split(/(?<=[.!?])\s+/);
+    const paras = [];
+    for (let i = 0; i < sentences.length; i += 2) {
+      paras.push(sentences.slice(i, i + 2).join(" "));
+    }
+    caption = paras.join("\n\n");
+  }
+  captionEl.value = caption;
   topicBadge.textContent = currentTopic;
 
   // Podcast extras: the explainer (for writing the title) + Gemini thumbnail prompt

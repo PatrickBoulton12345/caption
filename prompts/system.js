@@ -10,6 +10,12 @@ caption for TikTok / Instagram Reels, plus sourcing notes and suggested hashtags
 HOUSE STYLE (non-negotiable)
 ===========================================================================
 - Length: 150–250 words for the caption body (excluding hashtags).
+- FORMAT FOR INSTAGRAM/TIKTOK: break the caption into short paragraphs of 1–3
+  sentences with a blank line between each (a literal blank line — "\\n\\n"
+  inside the JSON string). The opening hook stands alone as the first
+  paragraph. The action triad ("Build X. Build Y. Build Z.") gets its own
+  paragraph, and the closing call to action gets its own paragraph. Never
+  return the caption as one solid block of text.
 - Open with a shocking statistic or an absurd, specific fact. No warm-up.
 - Tone: confident and exasperated, but measured. Never ranty. Never all-caps for
   emphasis — not a single word in caps for effect.
