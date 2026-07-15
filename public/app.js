@@ -327,96 +327,159 @@ const progress = {
   },
 };
 
-// ----- video pipeline: upload in pieces via the site → wait → transcribe -----
-// Google's upload endpoint doesn't accept browser requests directly, so the
-// file goes up in ~4 MB pieces through /api/upload-chunk, which relays each
-// piece along. Progress stays real.
-const CHUNK_SIZE = 4 * 1024 * 1024; // multiple of 256 KiB, under Vercel's body limit
+// ----- video pipeline: everything happens on this computer -----
+// The video never leaves the machine. Whisper (a free speech-recognition
+// model) runs in the browser to transcribe the audio, and a handful of
+// screenshots are grabbed from the video for Claude to look at — the same
+// listen-plus-screenshots routine Claude uses on claude.ai.
 
-async function uploadVideo(file, onPct) {
-  const startResp = await fetch("/api/upload-start", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      filename: file.name,
-      mimeType: file.type || "video/mp4",
-      sizeBytes: file.size,
-    }),
-  });
-  const startData = await startResp.json();
-  if (!startResp.ok) throw new Error(startData.error || "Upload couldn't start.");
+let transcriberPromise = null;
 
-  let offset = 0;
-  let fileInfo = null;
-
-  while (offset < file.size) {
-    const end = Math.min(offset + CHUNK_SIZE, file.size);
-    const isLast = end >= file.size;
-    const piece = file.slice(offset, end);
-
-    // two attempts per piece so one blip doesn't sink a long upload
-    let lastError = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const r = await fetch("/api/upload-chunk", {
-          method: "POST",
-          headers: {
-            "content-type": "application/octet-stream",
-            "x-upload-url": startData.uploadUrl,
-            "x-upload-offset": String(offset),
-            "x-upload-command": isLast ? "upload, finalize" : "upload",
-          },
-          body: piece,
-        });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || "Upload failed part-way.");
-        if (isLast) fileInfo = d.file;
-        lastError = null;
-        break;
-      } catch (e) {
-        lastError = e;
-        await new Promise((s) => setTimeout(s, 1500));
-      }
-    }
-    if (lastError) {
-      throw new Error(
-        `Upload failed ${Math.round((offset / file.size) * 100)}% of the way through — try again. (${lastError.message})`
+function getTranscriber(onDownload) {
+  if (!transcriberPromise) {
+    transcriberPromise = (async () => {
+      const { pipeline } = await import(
+        "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js"
       );
-    }
-
-    offset = end;
-    onPct(offset / file.size);
+      const seen = {};
+      const progress_callback = (info) => {
+        if (info.status === "progress" && info.file?.endsWith(".onnx")) {
+          seen[info.file] = info.progress || 0;
+          const vals = Object.values(seen);
+          const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+          onDownload(avg / 100);
+        }
+      };
+      // Prefer the graphics chip (much faster); fall back to plain mode
+      try {
+        const asr = await pipeline(
+          "automatic-speech-recognition",
+          "Xenova/whisper-base.en",
+          {
+            device: "webgpu",
+            dtype: { encoder_model: "fp32", decoder_model_merged: "q4" },
+            progress_callback,
+          }
+        );
+        asr._device = "webgpu";
+        return asr;
+      } catch {
+        const asr = await pipeline(
+          "automatic-speech-recognition",
+          "Xenova/whisper-base.en",
+          { progress_callback }
+        );
+        asr._device = "wasm";
+        return asr;
+      }
+    })();
+    transcriberPromise.catch(() => (transcriberPromise = null)); // allow retry
   }
-
-  if (!fileInfo?.uri || !fileInfo?.name) {
-    throw new Error("Upload finished but no file reference came back — try again.");
-  }
-  return fileInfo; // { name, uri, state }
+  return transcriberPromise;
 }
 
-async function waitUntilReady(fileName) {
-  for (let i = 0; i < 120; i++) { // up to ~8 minutes
-    const r = await fetch(`/api/video-status?name=${encodeURIComponent(fileName)}`);
-    const d = await r.json();
-    if (!r.ok) throw new Error(d.error || "Couldn't check the video.");
-    if (d.state === "ACTIVE") return d;
-    if (d.state === "FAILED") {
-      throw new Error("Google couldn't process that video — try a different export.");
-    }
-    await new Promise((s) => setTimeout(s, 4000));
+// Pull the audio track out of the file as 16 kHz mono samples (what Whisper eats)
+async function extractAudio(file) {
+  const buf = await file.arrayBuffer();
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx({ sampleRate: 16000 });
+  let decoded;
+  try {
+    decoded = await ctx.decodeAudioData(buf);
+  } catch {
+    ctx.close();
+    throw new Error(
+      "Couldn't read the audio from that file — try exporting it as MP4 (H.264 + AAC) and drop it in again."
+    );
   }
-  throw new Error("The video is taking too long to process — try again in a minute.");
+  ctx.close();
+
+  // mix down to mono
+  let mono = decoded.getChannelData(0);
+  if (decoded.numberOfChannels > 1) {
+    const ch1 = decoded.getChannelData(1);
+    mono = Float32Array.from(mono, (v, i) => (v + ch1[i]) / 2);
+  }
+
+  // resample if the browser didn't honour the 16 kHz request
+  if (decoded.sampleRate !== 16000) {
+    const ratio = decoded.sampleRate / 16000;
+    const out = new Float32Array(Math.floor(mono.length / ratio));
+    for (let i = 0; i < out.length; i++) out[i] = mono[Math.floor(i * ratio)];
+    mono = out;
+  }
+  return mono;
 }
 
-async function transcribeVideo(fileUri, mimeType) {
-  const r = await fetch("/api/transcribe", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ fileUri, mimeType }),
+// Grab n evenly-spaced screenshots from the video (as base64 JPEGs)
+function grabFrames(file, n = 8) {
+  return new Promise((resolve) => {
+    if (!file.type.startsWith("video/")) return resolve([]);
+    const v = document.createElement("video");
+    v.preload = "auto";
+    v.muted = true;
+    v.src = URL.createObjectURL(file);
+    v.onerror = () => resolve([]);
+    v.onloadedmetadata = async () => {
+      try {
+        const d = v.duration;
+        const count = d < 60 ? Math.min(n, 5) : n;
+        const frames = [];
+        for (let i = 0; i < count; i++) {
+          const t = d * (0.05 + (0.9 * i) / Math.max(1, count - 1));
+          await new Promise((res) => {
+            v.onseeked = res;
+            v.currentTime = t;
+          });
+          const c = document.createElement("canvas");
+          const scale = Math.min(1, 1024 / (v.videoWidth || 1024));
+          c.width = Math.max(1, Math.round(v.videoWidth * scale));
+          c.height = Math.max(1, Math.round(v.videoHeight * scale));
+          c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+          frames.push(c.toDataURL("image/jpeg", 0.75).split(",")[1]);
+        }
+        URL.revokeObjectURL(v.src);
+        resolve(frames);
+      } catch {
+        resolve([]);
+      }
+    };
   });
-  const d = await r.json();
-  if (!r.ok) throw new Error(d.error || "Transcription failed — try again.");
-  return d; // { transcript, visualNotes }
+}
+
+// Full local pipeline: returns { transcript, frames }
+async function processVideoLocally(file) {
+  const MAX_LOCAL_BYTES = 700 * 1024 * 1024;
+  if (file.size > MAX_LOCAL_BYTES) {
+    throw new Error(
+      "That file is over 700 MB — too big to process in the browser. Export a smaller version (720p is plenty) and drop it in again."
+    );
+  }
+
+  progress.set(0.02, "getting the transcriber ready…");
+  const asr = await getTranscriber((pct) =>
+    progress.set(0.02 + pct * 0.13, `downloading the transcriber (one-time)… ${Math.round(pct * 100)}%`)
+  );
+
+  progress.set(0.16, "pulling the audio out…");
+  const audio = await extractAudio(file);
+  const audioSec = audio.length / 16000;
+
+  // rough speed guesses: graphics chip ~7x realtime, plain mode ~0.7x
+  const speed = asr._device === "webgpu" ? 7 : 0.7;
+  progress.creep(0.18, 0.68, (audioSec / speed) * 1000, (s) =>
+    `listening to the audio… (~${Math.ceil(s / 60)} min left)`
+  );
+  const out = await asr(audio, { chunk_length_s: 30, stride_length_s: 5 });
+  progress.stop();
+  const transcript = (out.text || "").trim();
+  if (!transcript) {
+    throw new Error("The transcription came back empty — is there speech in the video?");
+  }
+
+  progress.set(0.7, "grabbing screenshots…");
+  const frames = await grabFrames(file);
+  return { transcript, frames };
 }
 
 generateBtn.addEventListener("click", async () => {
@@ -440,16 +503,10 @@ generateBtn.addEventListener("click", async () => {
   progress.set(0, "starting…");
 
   try {
-    // 1–3. video stages (only when a file was dropped)
+    // 1–3. video stages, all on this computer (only when a file was dropped)
     let videoData = null;
     if (videoFile) {
-      const info = await uploadVideo(videoFile, (pct) =>
-        progress.set(pct * 0.3, `uploading… ${Math.round(pct * 100)}%`)
-      );
-      progress.creep(0.3, 0.5, 90000, "google is taking the video in…");
-      const ready = await waitUntilReady(info.name);
-      progress.creep(0.5, 0.8, 150000, "transcribing + reading what's on screen…");
-      videoData = await transcribeVideo(ready.uri || info.uri, videoFile.type || "video/mp4");
+      videoData = await processVideoLocally(videoFile);
     }
 
     // 4. caption stage
@@ -461,14 +518,14 @@ generateBtn.addEventListener("click", async () => {
         imageBase64: currentImage?.base64,
         imageMediaType: currentImage?.mediaType,
         videoTranscript: videoData?.transcript,
-        visualNotes: videoData?.visualNotes,
+        frames: videoData?.frames,
       };
     } else {
       endpoint = "/api/podcast";
       payload = videoData
         ? {
             transcript: videoData.transcript,
-            visualNotes: videoData.visualNotes,
+            frames: videoData.frames,
             guests: podcastGuestsEl.value.trim(),
             title: podcastTitleEl.value.trim(),
           }
@@ -480,7 +537,7 @@ generateBtn.addEventListener("click", async () => {
           };
     }
 
-    const base = videoFile ? 0.8 : 0;
+    const base = videoFile ? 0.75 : 0;
     const eta = getEta(runMode);
     progress.creep(base, 0.96, eta, (s) =>
       videoFile ? "writing the caption…" : `~${s}s remaining`

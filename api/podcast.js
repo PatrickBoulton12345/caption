@@ -101,7 +101,7 @@ export default async function handler(req, res) {
       .json({ error: "Too many podcast runs this hour — try again later." });
   }
 
-  const { youtubeUrl, guests, title, visualNotes, transcript: pastedTranscript } =
+  const { youtubeUrl, guests, title, frames, transcript: pastedTranscript } =
     req.body || {};
 
   let transcript = (pastedTranscript || "").trim();
@@ -132,14 +132,26 @@ export default async function handler(req, res) {
   const briefLines = ["PODCAST EPISODE"];
   if (videoTitle) briefLines.push(`Working title (user-supplied or from YouTube): ${videoTitle}`);
   if (guests) briefLines.push(`Guest(s): ${guests}`);
-  if (visualNotes) {
+
+  // Screenshots from the episode go in as images so Claude can see the
+  // setting and the guests — feeds the thumbnail prompt.
+  const content = [];
+  if (Array.isArray(frames) && frames.length) {
     briefLines.push(
       "",
-      "WHAT'S ON SCREEN (from watching the video — use for the thumbnail prompt):",
-      visualNotes
+      "The attached images are evenly-spaced screenshots from the episode, in order — use them for the setting and the guests' appearance in the thumbnail prompt, and to read any on-screen text."
     );
+    for (const f of frames.slice(0, 10)) {
+      if (typeof f === "string" && f) {
+        content.push({
+          type: "image",
+          source: { type: "base64", media_type: "image/jpeg", data: f },
+        });
+      }
+    }
   }
   briefLines.push("", "TRANSCRIPT:", transcript);
+  content.push({ type: "text", text: briefLines.join("\n") });
 
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
@@ -153,7 +165,7 @@ export default async function handler(req, res) {
         model: "claude-sonnet-5",
         max_tokens: 4000,
         system: PODCAST_PROMPT,
-        messages: [{ role: "user", content: briefLines.join("\n") }],
+        messages: [{ role: "user", content }],
         tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }],
       }),
     });

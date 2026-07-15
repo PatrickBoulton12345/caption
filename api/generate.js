@@ -33,7 +33,7 @@ export default async function handler(req, res) {
       .json({ error: "Too many generations this hour — try again later." });
   }
 
-  const { brief, imageBase64, imageMediaType, videoTranscript, visualNotes } =
+  const { brief, imageBase64, imageMediaType, videoTranscript, frames } =
     req.body || {};
   if (!brief && !imageBase64 && !videoTranscript) {
     return res
@@ -41,7 +41,8 @@ export default async function handler(req, res) {
       .json({ error: "Provide a brief, an image, a video, or a mix." });
   }
 
-  // Build the user message: optional image first, then the text material
+  // Build the user message: images first (key frame and/or video screenshots),
+  // then the text material
   const content = [];
   if (imageBase64) {
     content.push({
@@ -53,17 +54,28 @@ export default async function handler(req, res) {
       },
     });
   }
+  if (Array.isArray(frames)) {
+    for (const f of frames.slice(0, 10)) {
+      if (typeof f === "string" && f) {
+        content.push({
+          type: "image",
+          source: { type: "base64", media_type: "image/jpeg", data: f },
+        });
+      }
+    }
+  }
 
   const textParts = [];
   if (brief) textParts.push(brief);
   if (videoTranscript) {
     textParts.push(
-      "TRANSCRIPT OF THE UPLOADED VIDEO (treat this as the reel's content):\n" +
+      "TRANSCRIPT OF THE UPLOADED VIDEO (treat this as the reel's content" +
+        (Array.isArray(frames) && frames.length
+          ? "; the attached images are screenshots from it, in order"
+          : "") +
+        "):\n" +
         videoTranscript
     );
-  }
-  if (visualNotes) {
-    textParts.push("WHAT'S ON SCREEN IN THE VIDEO:\n" + visualNotes);
   }
   content.push({
     type: "text",

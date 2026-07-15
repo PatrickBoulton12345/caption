@@ -8,12 +8,12 @@ Two modes:
 
 - **story / reel** — paste a story or one-line brief, optionally drop in a key
   frame image, get a caption.
-- **podcast** — drop the episode video straight onto the site (up to 2 GB; a
-  YouTube link or pasted transcript also works). The whole episode is watched
-  and listened to — audio transcribed, on-screen text read — then you get: a
-  plain-English explainer (what it's about + why it matters, so you can write
-  the title), the caption, hashtags, sources, and a ready-to-paste Gemini
-  prompt for a striking guest thumbnail in LFG colours.
+- **podcast** — drop the episode video straight onto the site (a YouTube link
+  or pasted transcript also works). The episode is transcribed with Whisper
+  running in your browser and screenshots are grabbed for Claude to look at —
+  then you get: a plain-English explainer (what it's about + why it matters,
+  so you can write the title), the caption, hashtags, sources, and a
+  ready-to-paste Gemini prompt for a striking guest thumbnail in LFG colours.
 
 The story/reel box also takes a video — drop a reel in and its transcript and
 visuals become the caption material.
@@ -35,13 +35,10 @@ visuals become the caption material.
 1. Create an Anthropic API key at [console.anthropic.com](https://console.anthropic.com).
 2. Go to [vercel.com](https://vercel.com) → **Add New → Project** → import this
    GitHub repo (`PatrickBoulton12345/caption`).
-3. Create a Gemini API key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-   (free tier is fine) — this powers the video watching/transcription.
-4. Before deploying, open **Settings → Environment Variables** and add both:
+3. Before deploying, open **Settings → Environment Variables** and add:
    - Name: `ANTHROPIC_API_KEY` — value: your key from step 1
-   - Name: `GEMINI_API_KEY` — value: your key from step 3
-5. Deploy. Vercel serves `/public` as the site and runs the `/api` routes
-   automatically. That's it — no build step, no installs.
+4. Deploy. Vercel serves `/public` as the site and runs the `/api` routes
+   automatically. That's it — no build step, no installs, no other keys.
 
 ## Nice to know
 
@@ -55,13 +52,14 @@ visuals become the caption material.
   Vercel KV behind a small `/api/hashtags` route.)
 - **Images** are resized in the browser before upload (max 1568px on the long
   edge), which keeps uploads fast and costs down.
-- **Videos** — uploaded videos travel to Google's servers in ~4 MB pieces
-  relayed through the site (browsers can't deliver to Google's upload door
-  directly), up to 2 GB. Gemini
-  transcribes the audio and reads the frames — like the Whisper-plus-
-  screenshots routine, done by a service built for it. The transcript and
-  visual notes then go to Claude for the caption. A 40-minute episode takes a
-  few minutes end to end; the progress bar narrates each stage.
+- **Videos never leave your computer.** Whisper (OpenAI's free
+  speech-recognition model) runs inside the browser to transcribe the audio,
+  and evenly-spaced screenshots are grabbed from the video. Only the
+  transcript and those few screenshots are sent to Claude. The first video you
+  ever run downloads the transcriber (~80 MB, cached after that). On a Mac
+  with Chrome, a 40-minute episode transcribes in roughly 5–10 minutes; the
+  progress bar narrates each stage. Files up to ~700 MB — export at 720p for
+  comfort.
 - **Podcasts from YouTube** still work too — the site fetches the video's
   subtitles from the link. If a video has no subtitles, paste the transcript
   (YouTube → "…" → "Show transcript") into the transcript box. You write the
