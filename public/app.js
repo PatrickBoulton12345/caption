@@ -110,7 +110,18 @@ const thumbnailCard = $("thumbnail-card");
 const thumbnailPromptEl = $("thumbnail-prompt");
 const copyThumbnailBtn = $("copy-thumbnail");
 
+const storyFileName = $("story-file-name");
+const podcastVideoInput = $("podcast-video");
+const pickPodcastVideoBtn = $("pick-podcast-video");
+const podcastVideoBox = $("podcast-video-box");
+const podcastVideoThumb = $("podcast-video-thumb");
+const clearPodcastVideoBtn = $("clear-podcast-video");
+const podcastVideoName = $("podcast-video-name");
+const podcastDropCard = $("podcast-drop-card");
+
 let currentImage = null; // { base64, mediaType }
+let currentVideo = null; // File (story/reel video)
+let podcastVideo = null; // File (podcast episode video)
 let currentTopic = "other";
 let hashtagsAdded = false;
 let mode = "story"; // "story" | "podcast"
@@ -139,10 +150,67 @@ tabPodcast.addEventListener("click", () => setMode("podcast"));
 // ---------------------------------------------------------------------------
 const dropCard = $("drop-card");
 
+// orange glow that sweeps from the top of the box downwards, then settles
+function sweepGlow(card, hasFile) {
+  card.classList.remove("glow-sweep", "has-image");
+  void card.offsetWidth; // restart the animation if it already ran
+  if (hasFile) card.classList.add("glow-sweep");
+}
+[dropCard, podcastDropCard].forEach((card) =>
+  card.addEventListener("animationend", () => {
+    card.classList.remove("glow-sweep");
+    card.classList.add("has-image");
+  })
+);
+
+// grab a frame from a video file to use as its thumbnail
+function videoPoster(file, cb) {
+  const v = document.createElement("video");
+  v.preload = "metadata";
+  v.muted = true;
+  v.src = URL.createObjectURL(file);
+  v.onloadeddata = () => {
+    v.currentTime = Math.min(1, (v.duration || 2) / 2);
+  };
+  v.onseeked = () => {
+    const c = document.createElement("canvas");
+    const scale = Math.min(1, 320 / (v.videoWidth || 320));
+    c.width = Math.max(1, Math.round(v.videoWidth * scale));
+    c.height = Math.max(1, Math.round(v.videoHeight * scale));
+    c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
+    cb(c.toDataURL("image/jpeg", 0.7));
+    URL.revokeObjectURL(v.src);
+  };
+  v.onerror = () => cb(null);
+}
+
+function prettySize(bytes) {
+  return bytes > 1024 * 1024 * 1024
+    ? (bytes / (1024 * 1024 * 1024)).toFixed(1) + " GB"
+    : Math.round(bytes / (1024 * 1024)) + " MB";
+}
+
+// ----- story tab: one box takes an image OR a video -----
 pickImageBtn.addEventListener("click", () => imageInput.click());
 
-function handleImageFile(file) {
-  if (!file || !file.type.startsWith("image/")) return;
+function handleStoryFile(file) {
+  if (!file) return;
+
+  if (file.type.startsWith("video/")) {
+    currentVideo = file;
+    currentImage = null;
+    storyFileName.textContent = `${file.name} (${prettySize(file.size)})`;
+    videoPoster(file, (dataUrl) => {
+      if (dataUrl) {
+        thumbEl.src = dataUrl;
+        thumbBox.hidden = false;
+      }
+    });
+    sweepGlow(dropCard, true);
+    return;
+  }
+
+  if (!file.type.startsWith("image/")) return;
   const img = new Image();
   const url = URL.createObjectURL(file);
   img.onload = () => {
@@ -158,108 +226,235 @@ function handleImageFile(file) {
     canvas.getContext("2d").drawImage(img, 0, 0, width, height);
 
     const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
-    currentImage = {
-      base64: dataUrl.split(",")[1],
-      mediaType: "image/jpeg",
-    };
+    currentImage = { base64: dataUrl.split(",")[1], mediaType: "image/jpeg" };
+    currentVideo = null;
+    storyFileName.textContent = "";
     thumbEl.src = dataUrl;
     thumbBox.hidden = false;
     URL.revokeObjectURL(url);
-
-    // orange glow: sweeps from the top of the box downwards, then settles
-    dropCard.classList.remove("glow-sweep", "has-image");
-    void dropCard.offsetWidth; // restart the animation if it already ran
-    dropCard.classList.add("glow-sweep");
+    sweepGlow(dropCard, true);
   };
   img.src = url;
 }
 
-dropCard.addEventListener("animationend", () => {
-  dropCard.classList.remove("glow-sweep");
-  if (currentImage) dropCard.classList.add("has-image");
-});
-
-imageInput.addEventListener("change", () => handleImageFile(imageInput.files[0]));
-
-// drag & drop onto the box
-["dragenter", "dragover"].forEach((evt) =>
-  dropCard.addEventListener(evt, (e) => {
-    e.preventDefault();
-    dropCard.classList.add("drag-over");
-  })
-);
-["dragleave", "drop"].forEach((evt) =>
-  dropCard.addEventListener(evt, (e) => {
-    e.preventDefault();
-    dropCard.classList.remove("drag-over");
-  })
-);
-dropCard.addEventListener("drop", (e) => {
-  handleImageFile(e.dataTransfer?.files?.[0]);
-});
+imageInput.addEventListener("change", () => handleStoryFile(imageInput.files[0]));
 
 clearImageBtn.addEventListener("click", () => {
   currentImage = null;
+  currentVideo = null;
   imageInput.value = "";
   thumbBox.hidden = true;
+  storyFileName.textContent = "";
   dropCard.classList.remove("glow-sweep", "has-image");
 });
+
+// ----- podcast tab: episode video box -----
+pickPodcastVideoBtn.addEventListener("click", () => podcastVideoInput.click());
+
+function handlePodcastFile(file) {
+  if (!file || !(file.type.startsWith("video/") || file.type.startsWith("audio/"))) return;
+  podcastVideo = file;
+  podcastVideoName.textContent = `${file.name} (${prettySize(file.size)})`;
+  if (file.type.startsWith("video/")) {
+    videoPoster(file, (dataUrl) => {
+      if (dataUrl) {
+        podcastVideoThumb.src = dataUrl;
+        podcastVideoBox.hidden = false;
+      }
+    });
+  }
+  sweepGlow(podcastDropCard, true);
+}
+
+podcastVideoInput.addEventListener("change", () =>
+  handlePodcastFile(podcastVideoInput.files[0])
+);
+
+clearPodcastVideoBtn.addEventListener("click", () => {
+  podcastVideo = null;
+  podcastVideoInput.value = "";
+  podcastVideoBox.hidden = true;
+  podcastVideoName.textContent = "";
+  podcastDropCard.classList.remove("glow-sweep", "has-image");
+});
+
+// ----- drag & drop for both boxes -----
+function wireDrop(card, onFile) {
+  ["dragenter", "dragover"].forEach((evt) =>
+    card.addEventListener(evt, (e) => {
+      e.preventDefault();
+      card.classList.add("drag-over");
+    })
+  );
+  ["dragleave", "drop"].forEach((evt) =>
+    card.addEventListener(evt, (e) => {
+      e.preventDefault();
+      card.classList.remove("drag-over");
+    })
+  );
+  card.addEventListener("drop", (e) => onFile(e.dataTransfer?.files?.[0]));
+}
+wireDrop(dropCard, handleStoryFile);
+wireDrop(podcastDropCard, handlePodcastFile);
 
 // ---------------------------------------------------------------------------
 // Generate flow with time-estimate-driven progress bar
 // ---------------------------------------------------------------------------
-generateBtn.addEventListener("click", async () => {
-  let endpoint, payload;
+// Stage-aware progress controller: real percentages while uploading,
+// time-estimate creep for the waiting stages.
+const progress = {
+  raf: null,
+  set(frac, label) {
+    barEl.style.width = (frac * 100).toFixed(1) + "%";
+    etaEl.textContent = label;
+  },
+  creep(from, to, ms, label) {
+    cancelAnimationFrame(this.raf);
+    const start = performance.now();
+    const tick = () => {
+      const t = Math.min(1, (performance.now() - start) / ms);
+      const remain = Math.max(0, Math.ceil((ms - (performance.now() - start)) / 1000));
+      this.set(
+        from + (to - from) * t,
+        typeof label === "function" ? label(remain) : label
+      );
+      if (t < 1) this.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  },
+  stop() {
+    cancelAnimationFrame(this.raf);
+  },
+};
 
-  if (mode === "story") {
-    const brief = briefEl.value.trim();
-    if (!brief && !currentImage) {
-      showError("Give me a brief, an image, or both.");
+// ----- video pipeline: upload direct to Google → wait → transcribe -----
+async function uploadVideo(file, onPct) {
+  const startResp = await fetch("/api/upload-start", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      filename: file.name,
+      mimeType: file.type || "video/mp4",
+      sizeBytes: file.size,
+    }),
+  });
+  const startData = await startResp.json();
+  if (!startResp.ok) throw new Error(startData.error || "Upload couldn't start.");
+
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", startData.uploadUrl);
+    xhr.setRequestHeader("X-Goog-Upload-Command", "upload, finalize");
+    xhr.setRequestHeader("X-Goog-Upload-Offset", "0");
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onPct(e.loaded / e.total);
+    };
+    xhr.onload = () => {
+      try {
+        resolve(JSON.parse(xhr.responseText).file); // { name, uri, state }
+      } catch {
+        reject(new Error("Upload finished but the reply was unreadable — try again."));
+      }
+    };
+    xhr.onerror = () =>
+      reject(new Error("Upload failed — check your connection and try again."));
+    xhr.send(file);
+  });
+}
+
+async function waitUntilReady(fileName) {
+  for (let i = 0; i < 120; i++) { // up to ~8 minutes
+    const r = await fetch(`/api/video-status?name=${encodeURIComponent(fileName)}`);
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Couldn't check the video.");
+    if (d.state === "ACTIVE") return d;
+    if (d.state === "FAILED") {
+      throw new Error("Google couldn't process that video — try a different export.");
+    }
+    await new Promise((s) => setTimeout(s, 4000));
+  }
+  throw new Error("The video is taking too long to process — try again in a minute.");
+}
+
+async function transcribeVideo(fileUri, mimeType) {
+  const r = await fetch("/api/transcribe", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ fileUri, mimeType }),
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || "Transcription failed — try again.");
+  return d; // { transcript, visualNotes }
+}
+
+generateBtn.addEventListener("click", async () => {
+  const runMode = mode;
+  const videoFile = runMode === "story" ? currentVideo : podcastVideo;
+
+  // validation
+  if (runMode === "story") {
+    if (!briefEl.value.trim() && !currentImage && !videoFile) {
+      showError("Give me a brief, an image, or a video.");
       return;
     }
-    endpoint = "/api/generate";
-    payload = {
-      brief,
-      imageBase64: currentImage?.base64,
-      imageMediaType: currentImage?.mediaType,
-    };
-  } else {
-    const youtubeUrl = podcastUrlEl.value.trim();
-    const transcript = podcastTranscriptEl.value.trim();
-    if (!youtubeUrl && !transcript) {
-      showError("Give me the YouTube link (or paste the transcript).");
-      return;
-    }
-    endpoint = "/api/podcast";
-    payload = {
-      youtubeUrl,
-      transcript,
-      guests: podcastGuestsEl.value.trim(),
-      title: podcastTitleEl.value.trim(),
-    };
+  } else if (!videoFile && !podcastUrlEl.value.trim() && !podcastTranscriptEl.value.trim()) {
+    showError("Upload the episode video (or give a YouTube link / paste the transcript).");
+    return;
   }
 
   errorEl.hidden = true;
   generateBtn.disabled = true;
   progressEl.hidden = false;
-
-  const runMode = mode;
-  const eta = getEta(runMode);
-  const start = performance.now();
-  let raf;
-  let done = false;
-
-  function tick() {
-    const elapsed = performance.now() - start;
-    const frac = done ? 1 : Math.min(0.92, elapsed / eta);
-    barEl.style.width = (frac * 100).toFixed(1) + "%";
-    const remain = Math.max(0, Math.ceil((eta - elapsed) / 1000));
-    etaEl.textContent = done ? "Done" : `~${remain}s remaining`;
-    if (!done) raf = requestAnimationFrame(tick);
-  }
-  tick();
+  progress.set(0, "starting…");
 
   try {
+    // 1–3. video stages (only when a file was dropped)
+    let videoData = null;
+    if (videoFile) {
+      const info = await uploadVideo(videoFile, (pct) =>
+        progress.set(pct * 0.3, `uploading… ${Math.round(pct * 100)}%`)
+      );
+      progress.creep(0.3, 0.5, 90000, "google is taking the video in…");
+      const ready = await waitUntilReady(info.name);
+      progress.creep(0.5, 0.8, 150000, "transcribing + reading what's on screen…");
+      videoData = await transcribeVideo(ready.uri || info.uri, videoFile.type || "video/mp4");
+    }
+
+    // 4. caption stage
+    let endpoint, payload;
+    if (runMode === "story") {
+      endpoint = "/api/generate";
+      payload = {
+        brief: briefEl.value.trim(),
+        imageBase64: currentImage?.base64,
+        imageMediaType: currentImage?.mediaType,
+        videoTranscript: videoData?.transcript,
+        visualNotes: videoData?.visualNotes,
+      };
+    } else {
+      endpoint = "/api/podcast";
+      payload = videoData
+        ? {
+            transcript: videoData.transcript,
+            visualNotes: videoData.visualNotes,
+            guests: podcastGuestsEl.value.trim(),
+            title: podcastTitleEl.value.trim(),
+          }
+        : {
+            youtubeUrl: podcastUrlEl.value.trim(),
+            transcript: podcastTranscriptEl.value.trim(),
+            guests: podcastGuestsEl.value.trim(),
+            title: podcastTitleEl.value.trim(),
+          };
+    }
+
+    const base = videoFile ? 0.8 : 0;
+    const eta = getEta(runMode);
+    progress.creep(base, 0.96, eta, (s) =>
+      videoFile ? "writing the caption…" : `~${s}s remaining`
+    );
+
+    const capStart = performance.now();
     const resp = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -267,26 +462,22 @@ generateBtn.addEventListener("click", async () => {
     });
     const data = await resp.json();
 
-    done = true;
-    cancelAnimationFrame(raf);
-    barEl.style.width = "100%";
-    etaEl.textContent = "Done";
-
+    progress.stop();
     if (!resp.ok) {
       throw new Error(data.error?.message || data.error || `Server error (${resp.status})`);
     }
-    recordEta(runMode, performance.now() - start);
+    progress.set(1, "Done");
+    recordEta(runMode, performance.now() - capStart);
 
     const result = parseModelJson(data);
     renderResult(result, extractSearchedPages(data), runMode);
   } catch (e) {
-    done = true;
-    cancelAnimationFrame(raf);
+    progress.stop();
     etaEl.textContent = "Error — try again";
     showError(String(e.message || e));
   } finally {
     generateBtn.disabled = false;
-    setTimeout(() => (progressEl.hidden = true), 1200);
+    setTimeout(() => (progressEl.hidden = true), 1500);
   }
 });
 

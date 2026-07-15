@@ -4,7 +4,10 @@
       "maxDuration": 60
     },
     "api/podcast.js": {
-      "maxDuration": 60
+      "maxDuration": 120
+    },
+    "api/transcribe.js": {
+      "maxDuration": 300
     }
   }
 }

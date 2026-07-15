@@ -41,26 +41,40 @@
           <textarea id="brief" rows="5" placeholder="Paste the story, link, or a one-line reel brief…"></textarea>
         </section>
 
-        <!-- 2. Image upload / drop zone -->
+        <!-- 2. Image / video upload / drop zone -->
         <section class="card drop-card" id="drop-card">
-          <label class="label" for="image">image / key frame <span class="optional">(optional — click or drag &amp; drop)</span></label>
+          <label class="label" for="image">image or video <span class="optional">(optional — click or drag &amp; drop)</span></label>
           <div class="upload-row">
-            <input type="file" id="image" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
-            <button type="button" id="pick-image" class="btn btn-ghost">choose image</button>
+            <input type="file" id="image" accept="image/png,image/jpeg,image/webp,image/gif,video/*" hidden />
+            <button type="button" id="pick-image" class="btn btn-ghost">choose file</button>
             <div id="thumb-box" class="thumb-box" hidden>
-              <img id="thumb" alt="Uploaded key frame preview" />
-              <button type="button" id="clear-image" class="thumb-clear" title="Remove image">×</button>
+              <img id="thumb" alt="Uploaded preview" />
+              <button type="button" id="clear-image" class="thumb-clear" title="Remove">×</button>
             </div>
+            <span id="story-file-name" class="file-name"></span>
           </div>
         </section>
       </div>
 
       <!-- ===== PODCAST MODE ===== -->
       <div id="podcast-panel" hidden>
+        <section class="card drop-card" id="podcast-drop-card">
+          <label class="label" for="podcast-video">episode video <span class="optional">(click or drag &amp; drop — up to 2&nbsp;gb)</span></label>
+          <div class="upload-row">
+            <input type="file" id="podcast-video" accept="video/*,audio/*" hidden />
+            <button type="button" id="pick-podcast-video" class="btn btn-ghost">choose video</button>
+            <div id="podcast-video-box" class="thumb-box" hidden>
+              <img id="podcast-video-thumb" alt="Episode video preview" />
+              <button type="button" id="clear-podcast-video" class="thumb-clear" title="Remove video">×</button>
+            </div>
+            <span id="podcast-video-name" class="file-name"></span>
+          </div>
+          <p class="hint" style="margin-top:10px">The whole episode is watched and listened to — audio transcribed, on-screen text read.</p>
+        </section>
+
         <section class="card">
-          <label class="label" for="podcast-url">youtube link</label>
+          <label class="label" for="podcast-url">or a youtube link <span class="optional">(if it's already up)</span></label>
           <input type="text" id="podcast-url" placeholder="https://www.youtube.com/watch?v=…" />
-          <p class="hint" style="margin-top:8px">The episode's subtitles are fetched and read in full — no need to summarise anything yourself.</p>
         </section>
 
         <section class="card">

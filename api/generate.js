@@ -33,12 +33,15 @@ export default async function handler(req, res) {
       .json({ error: "Too many generations this hour — try again later." });
   }
 
-  const { brief, imageBase64, imageMediaType } = req.body || {};
-  if (!brief && !imageBase64) {
-    return res.status(400).json({ error: "Provide a brief, an image, or both." });
+  const { brief, imageBase64, imageMediaType, videoTranscript, visualNotes } =
+    req.body || {};
+  if (!brief && !imageBase64 && !videoTranscript) {
+    return res
+      .status(400)
+      .json({ error: "Provide a brief, an image, a video, or a mix." });
   }
 
-  // Build the user message: optional image first, then the text brief
+  // Build the user message: optional image first, then the text material
   const content = [];
   if (imageBase64) {
     content.push({
@@ -50,9 +53,21 @@ export default async function handler(req, res) {
       },
     });
   }
+
+  const textParts = [];
+  if (brief) textParts.push(brief);
+  if (videoTranscript) {
+    textParts.push(
+      "TRANSCRIPT OF THE UPLOADED VIDEO (treat this as the reel's content):\n" +
+        videoTranscript
+    );
+  }
+  if (visualNotes) {
+    textParts.push("WHAT'S ON SCREEN IN THE VIDEO:\n" + visualNotes);
+  }
   content.push({
     type: "text",
-    text: brief || "No brief provided. Work from the image.",
+    text: textParts.join("\n\n") || "No brief provided. Work from the image.",
   });
 
   try {

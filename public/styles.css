@@ -169,6 +169,7 @@ textarea:focus, input[type="text"]:focus {
 .drop-card.has-image { box-shadow: 0 0 16px 3px rgba(254, 85, 0, 0.55); }
 
 .upload-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.file-name { font-size: 0.85rem; font-weight: 500; opacity: 0.75; overflow-wrap: anywhere; }
 .thumb-box { position: relative; }
 .thumb-box img {
   max-height: 90px;

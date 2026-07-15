@@ -101,7 +101,7 @@ export default async function handler(req, res) {
       .json({ error: "Too many podcast runs this hour — try again later." });
   }
 
-  const { youtubeUrl, guests, title, transcript: pastedTranscript } =
+  const { youtubeUrl, guests, title, visualNotes, transcript: pastedTranscript } =
     req.body || {};
 
   let transcript = (pastedTranscript || "").trim();
@@ -109,9 +109,9 @@ export default async function handler(req, res) {
 
   if (!transcript) {
     if (!youtubeUrl) {
-      return res
-        .status(400)
-        .json({ error: "Give me a YouTube link or paste the transcript." });
+      return res.status(400).json({
+        error: "Upload the episode video, give a YouTube link, or paste the transcript.",
+      });
     }
     try {
       const fetched = await fetchTranscript(youtubeUrl);
@@ -132,6 +132,13 @@ export default async function handler(req, res) {
   const briefLines = ["PODCAST EPISODE"];
   if (videoTitle) briefLines.push(`Working title (user-supplied or from YouTube): ${videoTitle}`);
   if (guests) briefLines.push(`Guest(s): ${guests}`);
+  if (visualNotes) {
+    briefLines.push(
+      "",
+      "WHAT'S ON SCREEN (from watching the video — use for the thumbnail prompt):",
+      visualNotes
+    );
+  }
   briefLines.push("", "TRANSCRIPT:", transcript);
 
   try {
