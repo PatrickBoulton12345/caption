@@ -327,7 +327,12 @@ const progress = {
   },
 };
 
-// ----- video pipeline: upload direct to Google → wait → transcribe -----
+// ----- video pipeline: upload in pieces via the site → wait → transcribe -----
+// Google's upload endpoint doesn't accept browser requests directly, so the
+// file goes up in ~4 MB pieces through /api/upload-chunk, which relays each
+// piece along. Progress stays real.
+const CHUNK_SIZE = 4 * 1024 * 1024; // multiple of 256 KiB, under Vercel's body limit
+
 async function uploadVideo(file, onPct) {
   const startResp = await fetch("/api/upload-start", {
     method: "POST",
@@ -341,25 +346,52 @@ async function uploadVideo(file, onPct) {
   const startData = await startResp.json();
   if (!startResp.ok) throw new Error(startData.error || "Upload couldn't start.");
 
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", startData.uploadUrl);
-    xhr.setRequestHeader("X-Goog-Upload-Command", "upload, finalize");
-    xhr.setRequestHeader("X-Goog-Upload-Offset", "0");
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) onPct(e.loaded / e.total);
-    };
-    xhr.onload = () => {
+  let offset = 0;
+  let fileInfo = null;
+
+  while (offset < file.size) {
+    const end = Math.min(offset + CHUNK_SIZE, file.size);
+    const isLast = end >= file.size;
+    const piece = file.slice(offset, end);
+
+    // two attempts per piece so one blip doesn't sink a long upload
+    let lastError = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        resolve(JSON.parse(xhr.responseText).file); // { name, uri, state }
-      } catch {
-        reject(new Error("Upload finished but the reply was unreadable — try again."));
+        const r = await fetch("/api/upload-chunk", {
+          method: "POST",
+          headers: {
+            "content-type": "application/octet-stream",
+            "x-upload-url": startData.uploadUrl,
+            "x-upload-offset": String(offset),
+            "x-upload-command": isLast ? "upload, finalize" : "upload",
+          },
+          body: piece,
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Upload failed part-way.");
+        if (isLast) fileInfo = d.file;
+        lastError = null;
+        break;
+      } catch (e) {
+        lastError = e;
+        await new Promise((s) => setTimeout(s, 1500));
       }
-    };
-    xhr.onerror = () =>
-      reject(new Error("Upload failed — check your connection and try again."));
-    xhr.send(file);
-  });
+    }
+    if (lastError) {
+      throw new Error(
+        `Upload failed ${Math.round((offset / file.size) * 100)}% of the way through — try again. (${lastError.message})`
+      );
+    }
+
+    offset = end;
+    onPct(offset / file.size);
+  }
+
+  if (!fileInfo?.uri || !fileInfo?.name) {
+    throw new Error("Upload finished but no file reference came back — try again.");
+  }
+  return fileInfo; // { name, uri, state }
 }
 
 async function waitUntilReady(fileName) {

@@ -3,6 +3,9 @@
     "api/generate.js": {
       "maxDuration": 60
     },
+    "api/upload-chunk.js": {
+      "maxDuration": 60
+    },
     "api/podcast.js": {
       "maxDuration": 120
     },

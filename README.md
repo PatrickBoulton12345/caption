@@ -55,8 +55,9 @@ visuals become the caption material.
   Vercel KV behind a small `/api/hashtags` route.)
 - **Images** are resized in the browser before upload (max 1568px on the long
   edge), which keeps uploads fast and costs down.
-- **Videos** — uploaded videos go from your browser straight to Google's
-  servers (never through ours, so big files are fine up to 2 GB). Gemini
+- **Videos** — uploaded videos travel to Google's servers in ~4 MB pieces
+  relayed through the site (browsers can't deliver to Google's upload door
+  directly), up to 2 GB. Gemini
   transcribes the audio and reads the frames — like the Whisper-plus-
   screenshots routine, done by a service built for it. The transcript and
   visual notes then go to Claude for the caption. A 40-minute episode takes a
