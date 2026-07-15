@@ -69,7 +69,7 @@
             </div>
             <span id="podcast-video-name" class="file-name"></span>
           </div>
-          <p class="hint" style="margin-top:10px">Everything happens on this computer: the audio is transcribed here (Whisper), screenshots are grabbed, and the video never leaves your machine. First run downloads the transcriber (~80&nbsp;MB, one-time).</p>
+          <p class="hint" style="margin-top:10px">The audio goes to the LFG transcription server in 5-minute pieces — watch the transcript fill in live below the generate button. Screenshots are grabbed here and sent to Claude with it.</p>
         </section>
 
         <section class="card">
@@ -98,6 +98,12 @@
           <p id="eta" class="eta">~28s remaining</p>
         </div>
         <p id="error" class="error" hidden></p>
+      </section>
+
+      <!-- Live transcript: fills in as the audio is transcribed -->
+      <section id="live-card" class="card live-card" hidden>
+        <p class="label">live transcript <span id="live-stats" class="optional"></span></p>
+        <div id="live-text" class="live-text" aria-live="polite"></div>
       </section>
 
       <!-- 4–5. Results -->

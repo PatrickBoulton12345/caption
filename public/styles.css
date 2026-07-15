@@ -282,6 +282,19 @@ textarea:focus, input[type="text"]:focus {
 .sourcing .source { opacity: 0.75; display: block; margin-top: 2px; overflow-wrap: anywhere; }
 .sourcing a { color: var(--black); text-decoration-color: var(--orange); text-decoration-thickness: 2px; }
 
+/* Live transcript */
+.live-card { border-left: 10px solid var(--yellow); }
+.live-text {
+  background: #fff;
+  border: 2px solid var(--black);
+  padding: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+.live-text:empty::before { content: "…"; opacity: 0.4; }
+
 /* Podcast explainer card */
 .explainer { border-left: 10px solid var(--blue); }
 .explainer p:not(.label) { font-size: 0.98rem; }

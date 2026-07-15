@@ -9,11 +9,12 @@ Two modes:
 - **story / reel** — paste a story or one-line brief, optionally drop in a key
   frame image, get a caption.
 - **podcast** — drop the episode video straight onto the site (a YouTube link
-  or pasted transcript also works). The episode is transcribed with Whisper
-  running in your browser and screenshots are grabbed for Claude to look at —
-  then you get: a plain-English explainer (what it's about + why it matters,
-  so you can write the title), the caption, hashtags, sources, and a
-  ready-to-paste Gemini prompt for a striking guest thumbnail in LFG colours.
+  or pasted transcript also works). The audio is transcribed by Whisper on the
+  LFG transcription server (Cloudflare), with the transcript appearing live on
+  the page, and screenshots are grabbed for Claude to look at — then you get:
+  a plain-English explainer (what it's about + why it matters, so you can
+  write the title), the caption, hashtags, sources, and a ready-to-paste
+  Gemini prompt for a striking guest thumbnail in LFG colours.
 
 The story/reel box also takes a video — drop a reel in and its transcript and
 visuals become the caption material.
@@ -52,14 +53,18 @@ visuals become the caption material.
   Vercel KV behind a small `/api/hashtags` route.)
 - **Images** are resized in the browser before upload (max 1568px on the long
   edge), which keeps uploads fast and costs down.
-- **Videos never leave your computer.** Whisper (OpenAI's free
-  speech-recognition model) runs inside the browser to transcribe the audio,
-  and evenly-spaced screenshots are grabbed from the video. Only the
-  transcript and those few screenshots are sent to Claude. The first video you
-  ever run downloads the transcriber (~80 MB, cached after that). On a Mac
-  with Chrome, a 40-minute episode transcribes in roughly 5–10 minutes; the
-  progress bar narrates each stage. Files up to ~700 MB — export at 720p for
-  comfort.
+- **Videos** — the browser pulls the audio track out and sends it in 5-minute
+  pieces to the LFG transcription server (a Cloudflare Worker in `/cloudflare`
+  running Whisper on Cloudflare's servers). The transcript fills in live on
+  the page as each piece comes back, with real progress and measured time
+  left. Screenshots are grabbed in the browser and sent to Claude alongside
+  the transcript. Files up to ~700 MB — export at 720p for comfort.
+- **Transcription server** — deployed from `/cloudflare` with
+  `npx wrangler deploy` (already live at
+  `lfg-transcriber.patrickboulton44.workers.dev`; the site finds it via
+  `/api/config`, overridable with a `TRANSCRIBER_URL` env var in Vercel).
+  Uses Cloudflare Workers AI (`whisper-large-v3-turbo`) — generous free
+  allowance, then pennies per episode.
 - **Podcasts from YouTube** still work too — the site fetches the video's
   subtitles from the link. If a video has no subtitles, paste the transcript
   (YouTube → "…" → "Show transcript") into the transcript box. You write the

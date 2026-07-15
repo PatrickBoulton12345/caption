@@ -327,60 +327,19 @@ const progress = {
   },
 };
 
-// ----- video pipeline: everything happens on this computer -----
-// The video never leaves the machine. Whisper (a free speech-recognition
-// model) runs in the browser to transcribe the audio, and a handful of
-// screenshots are grabbed from the video for Claude to look at — the same
-// listen-plus-screenshots routine Claude uses on claude.ai.
+// ----- video pipeline: audio out in the browser, Whisper on Cloudflare -----
+// The browser pulls the audio track out of the file, slices it into 5-minute
+// pieces, and sends each piece to the LFG transcription server (a Cloudflare
+// Worker running Whisper). As each piece comes back, the live transcript box
+// fills in and the progress bar reflects real progress.
 
-let transcriberPromise = null;
+const liveCard = $("live-card");
+const liveText = $("live-text");
+const liveStats = $("live-stats");
 
-function getTranscriber(onDownload) {
-  if (!transcriberPromise) {
-    transcriberPromise = (async () => {
-      const { pipeline } = await import(
-        "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js"
-      );
-      const seen = {};
-      const progress_callback = (info) => {
-        if (info.status === "progress" && info.file?.endsWith(".onnx")) {
-          seen[info.file] = info.progress || 0;
-          const vals = Object.values(seen);
-          const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
-          onDownload(avg / 100);
-        }
-      };
-      // Prefer the graphics chip (much faster); fall back to plain mode
-      try {
-        const asr = await pipeline(
-          "automatic-speech-recognition",
-          "Xenova/whisper-base.en",
-          {
-            device: "webgpu",
-            dtype: { encoder_model: "fp32", decoder_model_merged: "q4" },
-            progress_callback,
-          }
-        );
-        asr._device = "webgpu";
-        return asr;
-      } catch {
-        const asr = await pipeline(
-          "automatic-speech-recognition",
-          "Xenova/whisper-base.en",
-          { progress_callback }
-        );
-        asr._device = "wasm";
-        return asr;
-      }
-    })();
-    transcriberPromise.catch(() => (transcriberPromise = null)); // allow retry
-  }
-  return transcriberPromise;
-}
-
-// Pull the audio track out of the file as 16 kHz mono samples (what Whisper eats)
-async function extractAudio(file) {
-  const buf = await file.arrayBuffer();
+// Pull the audio track out as 16 kHz mono 16-bit samples (small + Whisper-ready)
+async function extractAudioInt16(file) {
+  let buf = await file.arrayBuffer();
   const Ctx = window.AudioContext || window.webkitAudioContext;
   const ctx = new Ctx({ sampleRate: 16000 });
   let decoded;
@@ -391,6 +350,8 @@ async function extractAudio(file) {
     throw new Error(
       "Couldn't read the audio from that file — try exporting it as MP4 (H.264 + AAC) and drop it in again."
     );
+  } finally {
+    buf = null; // let the browser reclaim the raw file bytes
   }
   ctx.close();
 
@@ -408,7 +369,116 @@ async function extractAudio(file) {
     for (let i = 0; i < out.length; i++) out[i] = mono[Math.floor(i * ratio)];
     mono = out;
   }
-  return mono;
+
+  // 32-bit float → 16-bit — halves the memory and the upload size
+  const samples = new Int16Array(mono.length);
+  for (let i = 0; i < mono.length; i++) {
+    const s = Math.max(-1, Math.min(1, mono[i]));
+    samples[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return samples;
+}
+
+// Wrap 16-bit samples in a standard WAV header
+function encodeWav(samples, sampleRate) {
+  const buf = new ArrayBuffer(44 + samples.length * 2);
+  const v = new DataView(buf);
+  const ws = (o, s) => {
+    for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i));
+  };
+  ws(0, "RIFF");
+  v.setUint32(4, 36 + samples.length * 2, true);
+  ws(8, "WAVE");
+  ws(12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); // PCM
+  v.setUint16(22, 1, true); // mono
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  ws(36, "data");
+  v.setUint32(40, samples.length * 2, true);
+  new Int16Array(buf, 44).set(samples);
+  return buf;
+}
+
+async function getTranscriberUrl() {
+  const cfg = await fetch("/api/config").then((r) => r.json()).catch(() => ({}));
+  const url = (cfg.transcriberUrl || "").replace(/\/$/, "");
+  if (!url) {
+    throw new Error(
+      "The transcription server isn't connected yet — add TRANSCRIBER_URL in Vercel's environment variables."
+    );
+  }
+  return url;
+}
+
+const CHUNK_SECONDS = 300; // 5-minute pieces (~9.6 MB each as WAV)
+
+async function transcribeOnCloudflare(file) {
+  const base = await getTranscriberUrl();
+
+  progress.set(0.03, "pulling the audio out…");
+  const samples = await extractAudioInt16(file);
+  const per = CHUNK_SECONDS * 16000;
+  const n = Math.max(1, Math.ceil(samples.length / per));
+  const totalMin = Math.max(1, Math.round(samples.length / 16000 / 60));
+
+  liveCard.hidden = false;
+  liveText.textContent = "";
+  liveStats.textContent = "";
+
+  let full = "";
+  const t0 = performance.now();
+
+  for (let i = 0; i < n; i++) {
+    const piece = samples.subarray(i * per, Math.min((i + 1) * per, samples.length));
+    const wav = encodeWav(piece, 16000);
+
+    // two attempts per piece so one blip doesn't sink a long episode
+    let text = null;
+    let lastError = null;
+    for (let attempt = 0; attempt < 2 && text === null; attempt++) {
+      try {
+        const r = await fetch(`${base}/transcribe`, {
+          method: "POST",
+          headers: { "content-type": "application/octet-stream" },
+          body: wav,
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.error || `Transcription server error (${r.status}).`);
+        text = d.text || "";
+      } catch (e) {
+        lastError = e;
+        await new Promise((s) => setTimeout(s, 2000));
+      }
+    }
+    if (text === null) {
+      throw new Error(
+        `Transcription stopped ${Math.round((i / n) * 100)}% of the way through — try again. (${lastError.message})`
+      );
+    }
+
+    full += (full && text ? " " : "") + text;
+    liveText.textContent += (i ? " " : "") + text;
+    liveText.scrollTop = liveText.scrollHeight;
+
+    // real progress + measured time left
+    const frac = (i + 1) / n;
+    const elapsed = performance.now() - t0;
+    const remainMin = Math.ceil((elapsed / frac - elapsed) / 60000);
+    const doneMin = Math.min(totalMin, Math.round(((i + 1) * CHUNK_SECONDS) / 60));
+    liveStats.textContent = `— ${doneMin} of ${totalMin} min heard`;
+    progress.set(
+      0.08 + frac * 0.62,
+      frac < 1
+        ? `listening… ${Math.round(frac * 100)}% · ~${remainMin} min left`
+        : "listening… done"
+    );
+  }
+
+  return full.trim();
 }
 
 // Grab n evenly-spaced screenshots from the video (as base64 JPEGs)
@@ -447,37 +517,21 @@ function grabFrames(file, n = 8) {
   });
 }
 
-// Full local pipeline: returns { transcript, frames }
-async function processVideoLocally(file) {
-  const MAX_LOCAL_BYTES = 700 * 1024 * 1024;
-  if (file.size > MAX_LOCAL_BYTES) {
+// Full pipeline: returns { transcript, frames }
+async function processVideo(file) {
+  const MAX_BYTES = 700 * 1024 * 1024;
+  if (file.size > MAX_BYTES) {
     throw new Error(
-      "That file is over 700 MB — too big to process in the browser. Export a smaller version (720p is plenty) and drop it in again."
+      "That file is over 700 MB — export a smaller version (720p is plenty) and drop it in again."
     );
   }
 
-  progress.set(0.02, "getting the transcriber ready…");
-  const asr = await getTranscriber((pct) =>
-    progress.set(0.02 + pct * 0.13, `downloading the transcriber (one-time)… ${Math.round(pct * 100)}%`)
-  );
-
-  progress.set(0.16, "pulling the audio out…");
-  const audio = await extractAudio(file);
-  const audioSec = audio.length / 16000;
-
-  // rough speed guesses: graphics chip ~7x realtime, plain mode ~0.7x
-  const speed = asr._device === "webgpu" ? 7 : 0.7;
-  progress.creep(0.18, 0.68, (audioSec / speed) * 1000, (s) =>
-    `listening to the audio… (~${Math.ceil(s / 60)} min left)`
-  );
-  const out = await asr(audio, { chunk_length_s: 30, stride_length_s: 5 });
-  progress.stop();
-  const transcript = (out.text || "").trim();
+  const transcript = await transcribeOnCloudflare(file);
   if (!transcript) {
     throw new Error("The transcription came back empty — is there speech in the video?");
   }
 
-  progress.set(0.7, "grabbing screenshots…");
+  progress.set(0.72, "grabbing screenshots…");
   const frames = await grabFrames(file);
   return { transcript, frames };
 }
@@ -503,10 +557,10 @@ generateBtn.addEventListener("click", async () => {
   progress.set(0, "starting…");
 
   try {
-    // 1–3. video stages, all on this computer (only when a file was dropped)
+    // 1–3. video stages (only when a file was dropped)
     let videoData = null;
     if (videoFile) {
-      videoData = await processVideoLocally(videoFile);
+      videoData = await processVideo(videoFile);
     }
 
     // 4. caption stage
