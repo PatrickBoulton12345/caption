@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=11" />
+  <link rel="stylesheet" href="styles.css?v=12" />
 </head>
 <body>
   <!-- LFG graphical motif: progressing colour bars -->
@@ -134,6 +134,17 @@
           </div>
         </section>
 
+        <!-- Feedback: rewrite now + remember for every future caption -->
+        <section id="feedback-card" class="card feedback-card">
+          <label class="label" for="feedback">teach it <span class="optional">— what should be different?</span></label>
+          <div class="add-row">
+            <input type="text" id="feedback" placeholder="e.g. shorter sentences · more numbers in the hook · never say 'rotting'" />
+            <button type="button" id="send-feedback" class="btn btn-blue">improve &amp; remember</button>
+          </div>
+          <p class="hint" style="margin-top:10px">Rewrites this caption now, and every future caption follows the lesson. Click × to unlearn one.</p>
+          <div id="lessons" class="lessons"></div>
+        </section>
+
         <!-- Gemini thumbnail prompt (podcast mode) -->
         <section id="thumbnail-card" class="card" hidden>
           <label class="label" for="thumbnail-prompt">thumbnail prompt for gemini</label>
@@ -165,6 +176,6 @@
     </aside>
   </div>
 
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

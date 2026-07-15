@@ -101,8 +101,15 @@ export default async function handler(req, res) {
       .json({ error: "Too many podcast runs this hour — try again later." });
   }
 
-  const { youtubeUrl, guests, title, frames, transcript: pastedTranscript } =
-    req.body || {};
+  const {
+    youtubeUrl,
+    guests,
+    title,
+    frames,
+    styleNotes,
+    revise,
+    transcript: pastedTranscript,
+  } = req.body || {};
 
   let transcript = (pastedTranscript || "").trim();
   let videoTitle = (title || "").trim();
@@ -150,8 +157,31 @@ export default async function handler(req, res) {
       }
     }
   }
+  if (revise?.previousCaption && revise?.feedback) {
+    briefLines.push(
+      "",
+      "PREVIOUS CAPTION (you wrote this):",
+      String(revise.previousCaption).slice(0, 4000),
+      "",
+      `USER FEEDBACK on it: ${String(revise.feedback).slice(0, 500)}`,
+      "Rewrite applying this feedback. Return the full JSON object again."
+    );
+  }
   briefLines.push("", "TRANSCRIPT:", transcript);
   content.push({ type: "text", text: briefLines.join("\n") });
+
+  // Standing lessons from past feedback, appended to the house style
+  let system = PODCAST_PROMPT;
+  if (Array.isArray(styleNotes) && styleNotes.length) {
+    system +=
+      "\n\n===========================================================================\n" +
+      "STANDING STYLE NOTES FROM THE USER (accumulated feedback — always follow)\n" +
+      "===========================================================================\n" +
+      styleNotes
+        .slice(-20)
+        .map((s) => "- " + String(s).slice(0, 300))
+        .join("\n");
+  }
 
   try {
     // The web-search loop can pause mid-turn (stop_reason "pause_turn") —
@@ -169,7 +199,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           model: "claude-sonnet-5",
           max_tokens: 6000,
-          system: PODCAST_PROMPT,
+          system,
           messages,
           tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }],
         }),

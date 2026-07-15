@@ -282,6 +282,29 @@ textarea:focus, input[type="text"]:focus {
 .sourcing .source { opacity: 0.75; display: block; margin-top: 2px; overflow-wrap: anywhere; }
 .sourcing a { color: var(--black); text-decoration-color: var(--orange); text-decoration-thickness: 2px; }
 
+/* Feedback / lessons */
+.feedback-card { border-left: 10px solid var(--black); }
+.lessons { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+.lesson {
+  font-size: 0.82rem;
+  background: #fff;
+  border: 2px solid var(--black);
+  border-radius: 999px;
+  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lesson button {
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--orange);
+  cursor: pointer;
+  line-height: 1;
+}
+
 /* Live transcript */
 .live-card { border-left: 10px solid var(--yellow); }
 .live-text {

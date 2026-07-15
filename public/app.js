@@ -68,6 +68,13 @@ function isLearned(tag, topic) {
 }
 
 // ---------------------------------------------------------------------------
+// Lessons: standing style notes learned from feedback, sent with every run
+// ---------------------------------------------------------------------------
+const LESSONS_KEY = "lfg_lessons";
+const loadLessons = () => JSON.parse(localStorage.getItem(LESSONS_KEY) || "[]");
+const saveLessons = (arr) => localStorage.setItem(LESSONS_KEY, JSON.stringify(arr));
+
+// ---------------------------------------------------------------------------
 // DOM handles
 // ---------------------------------------------------------------------------
 const $ = (id) => document.getElementById(id);
@@ -90,6 +97,9 @@ const newTagInput = $("new-tag");
 const addTagBtn = $("add-tag");
 const addToCaptionBtn = $("add-to-caption");
 const copyBtn = $("copy");
+const feedbackEl = $("feedback");
+const sendFeedbackBtn = $("send-feedback");
+const lessonsEl = $("lessons");
 const sourcingEl = $("sourcing");
 const sourcesPanel = $("sources-panel");
 const searchedBlock = $("searched-block");
@@ -590,6 +600,7 @@ generateBtn.addEventListener("click", async () => {
             title: podcastTitleEl.value.trim(),
           };
     }
+    payload.styleNotes = loadLessons(); // lessons learned from past feedback
 
     const base = videoFile ? 0.75 : 0;
     const eta = getEta(runMode);
@@ -598,32 +609,13 @@ generateBtn.addEventListener("click", async () => {
     );
 
     const capStart = performance.now();
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    // some failures (e.g. a server timeout) return an error page, not JSON —
-    // translate that into plain English instead of a cryptic browser error
-    const raw = await resp.text();
-    let data;
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      throw new Error(
-        resp.status === 504
-          ? "The caption took too long to write — hit generate again."
-          : `The server replied oddly (${resp.status}) — hit generate again.`
-      );
-    }
+    const data = await callCaption(endpoint, payload);
 
     progress.stop();
-    if (!resp.ok) {
-      throw new Error(data.error?.message || data.error || `Server error (${resp.status})`);
-    }
     progress.set(1, "Done");
     recordEta(runMode, performance.now() - capStart);
 
+    lastRun = { endpoint, payload, runMode }; // kept so feedback can rewrite
     const result = parseModelJson(data);
     renderResult(result, extractSearchedPages(data), runMode);
   } catch (e) {
@@ -634,6 +626,103 @@ generateBtn.addEventListener("click", async () => {
     generateBtn.disabled = false;
     setTimeout(() => (progressEl.hidden = true), 1500);
   }
+});
+
+let lastRun = null; // { endpoint, payload, runMode } of the latest generation
+
+// Call a caption route and return parsed JSON, translating non-JSON failures
+// (e.g. a server timeout page) into plain English
+async function callCaption(endpoint, payload) {
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const raw = await resp.text();
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      resp.status === 504
+        ? "The caption took too long to write — hit generate again."
+        : `The server replied oddly (${resp.status}) — hit generate again.`
+    );
+  }
+  if (!resp.ok) {
+    throw new Error(data.error?.message || data.error || `Server error (${resp.status})`);
+  }
+  return data;
+}
+
+// ----- feedback: rewrite this caption now + remember the lesson forever -----
+function renderLessons() {
+  lessonsEl.innerHTML = "";
+  loadLessons().forEach((lesson, idx) => {
+    const chip = document.createElement("span");
+    chip.className = "lesson";
+    const txt = document.createElement("span");
+    txt.textContent = lesson;
+    const del = document.createElement("button");
+    del.type = "button";
+    del.textContent = "×";
+    del.title = "Unlearn this";
+    del.addEventListener("click", () => {
+      const arr = loadLessons();
+      arr.splice(idx, 1);
+      saveLessons(arr);
+      renderLessons();
+    });
+    chip.append(txt, del);
+    lessonsEl.appendChild(chip);
+  });
+}
+renderLessons();
+
+async function sendFeedback() {
+  const note = feedbackEl.value.trim();
+  if (!note) return;
+  if (!lastRun) {
+    showError("Generate a caption first, then teach it.");
+    return;
+  }
+
+  const lessons = loadLessons();
+  lessons.push(note);
+  saveLessons(lessons);
+  renderLessons();
+  feedbackEl.value = "";
+
+  errorEl.hidden = true;
+  sendFeedbackBtn.disabled = true;
+  generateBtn.disabled = true;
+  progressEl.hidden = false;
+  progress.creep(0, 0.95, getEta(lastRun.runMode), () => "rewriting with your note…");
+
+  try {
+    const payload = {
+      ...lastRun.payload,
+      styleNotes: loadLessons(),
+      revise: { previousCaption: captionEl.value, feedback: note },
+    };
+    const data = await callCaption(lastRun.endpoint, payload);
+    progress.stop();
+    progress.set(1, "Done");
+    const result = parseModelJson(data);
+    renderResult(result, extractSearchedPages(data), lastRun.runMode);
+  } catch (e) {
+    progress.stop();
+    etaEl.textContent = "Error — try again";
+    showError(String(e.message || e));
+  } finally {
+    sendFeedbackBtn.disabled = false;
+    generateBtn.disabled = false;
+    setTimeout(() => (progressEl.hidden = true), 1500);
+  }
+}
+sendFeedbackBtn.addEventListener("click", sendFeedback);
+feedbackEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendFeedback();
 });
 
 // Pull the JSON object out of the model's text blocks

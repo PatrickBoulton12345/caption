@@ -33,8 +33,15 @@ export default async function handler(req, res) {
       .json({ error: "Too many generations this hour — try again later." });
   }
 
-  const { brief, imageBase64, imageMediaType, videoTranscript, frames } =
-    req.body || {};
+  const {
+    brief,
+    imageBase64,
+    imageMediaType,
+    videoTranscript,
+    frames,
+    styleNotes,
+    revise,
+  } = req.body || {};
   if (!brief && !imageBase64 && !videoTranscript) {
     return res
       .status(400)
@@ -77,10 +84,30 @@ export default async function handler(req, res) {
         videoTranscript
     );
   }
+  if (revise?.previousCaption && revise?.feedback) {
+    textParts.push(
+      `PREVIOUS CAPTION (you wrote this):\n${String(revise.previousCaption).slice(0, 4000)}\n\n` +
+        `USER FEEDBACK on it: ${String(revise.feedback).slice(0, 500)}\n\n` +
+        "Rewrite the caption applying this feedback. Return the full JSON object again."
+    );
+  }
   content.push({
     type: "text",
     text: textParts.join("\n\n") || "No brief provided. Work from the image.",
   });
+
+  // Standing lessons from past feedback, appended to the house style
+  let system = SYSTEM_PROMPT;
+  if (Array.isArray(styleNotes) && styleNotes.length) {
+    system +=
+      "\n\n===========================================================================\n" +
+      "STANDING STYLE NOTES FROM THE USER (accumulated feedback — always follow)\n" +
+      "===========================================================================\n" +
+      styleNotes
+        .slice(-20)
+        .map((s) => "- " + String(s).slice(0, 300))
+        .join("\n");
+  }
 
   try {
     // The web-search loop can pause mid-turn (stop_reason "pause_turn") —
@@ -98,7 +125,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           model: "claude-sonnet-5",
           max_tokens: 4000,
-          system: SYSTEM_PROMPT,
+          system,
           messages,
           // Server-side web search — Anthropic runs the searches.
           tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 8 }],
