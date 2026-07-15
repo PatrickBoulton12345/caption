@@ -1,10 +1,10 @@
 {
   "functions": {
     "api/generate.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/podcast.js": {
-      "maxDuration": 120
+      "maxDuration": 300
     }
   }
 }

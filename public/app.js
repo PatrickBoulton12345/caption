@@ -603,7 +603,19 @@ generateBtn.addEventListener("click", async () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const data = await resp.json();
+    // some failures (e.g. a server timeout) return an error page, not JSON —
+    // translate that into plain English instead of a cryptic browser error
+    const raw = await resp.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      throw new Error(
+        resp.status === 504
+          ? "The caption took too long to write — hit generate again."
+          : `The server replied oddly (${resp.status}) — hit generate again.`
+      );
+    }
 
     progress.stop();
     if (!resp.ok) {
