@@ -104,8 +104,53 @@ body.generating .bg-fx { opacity: 1; }
   to { background-position: 62px 62px; }
 }
 
+/* brand colour bars sweeping down the screen */
+.bg-fx .bars-fx {
+  position: absolute;
+  inset: -140px 0 0 0;
+  background: repeating-linear-gradient(
+    180deg,
+    var(--yellow) 0 28px,
+    var(--orange) 28px 56px,
+    var(--blue) 56px 84px,
+    var(--cream) 84px 140px
+  );
+  opacity: 0.22;
+  animation: bars-slide 5s linear infinite;
+}
+@keyframes bars-slide {
+  to { transform: translateY(140px); }
+}
+
+/* ----- variants: one is picked at random per generation -----
+   fx-classic = wash + glows + diagonal pattern
+   fx-pulse   = cascading colours + pulsing glows, no patterns
+   fx-bars    = brand bars sweeping down + soft glows            */
+.bg-fx .pattern, .bg-fx .bars-fx { display: none; }
+body.fx-classic .pattern { display: block; }
+body.fx-bars .bars-fx { display: block; }
+
+body.fx-pulse .glow-orange {
+  animation: drift-a 11s ease-in-out infinite alternate,
+    glow-pulse 2.4s ease-in-out infinite;
+}
+body.fx-pulse .glow-blue {
+  animation: drift-b 13s ease-in-out infinite alternate,
+    glow-pulse 3.1s ease-in-out infinite;
+}
+body.fx-pulse .glow-yellow {
+  animation: drift-c 9s ease-in-out infinite alternate,
+    glow-pulse 2.7s ease-in-out infinite;
+}
+body.fx-pulse .wash { opacity: 0.4; animation-duration: 6s; }
+@keyframes glow-pulse {
+  50% { opacity: 0.85; filter: blur(55px); }
+}
+
+body.fx-bars .glow { opacity: 0.3; }
+
 @media (prefers-reduced-motion: reduce) {
-  .bg-fx .wash, .bg-fx .glow, .bg-fx .pattern { animation: none; }
+  .bg-fx .wash, .bg-fx .glow, .bg-fx .pattern, .bg-fx .bars-fx { animation: none; }
 }
 
 /* page content sits above the light show */
@@ -257,6 +302,16 @@ textarea:focus, input[type="text"]:focus {
 
 .upload-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .file-name { font-size: 0.85rem; font-weight: 500; opacity: 0.75; overflow-wrap: anywhere; }
+
+/* thumbnail grid for carousel images / video poster */
+.thumbs { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.thumbs:empty { margin-top: 0; }
+.thumb-item { position: relative; }
+.thumb-item img {
+  height: 84px;
+  display: block;
+  border: 2px solid var(--black);
+}
 .thumb-box { position: relative; }
 .thumb-box img {
   max-height: 90px;

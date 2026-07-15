@@ -81,9 +81,7 @@ const $ = (id) => document.getElementById(id);
 const briefEl = $("brief");
 const imageInput = $("image");
 const pickImageBtn = $("pick-image");
-const thumbBox = $("thumb-box");
-const thumbEl = $("thumb");
-const clearImageBtn = $("clear-image");
+const thumbsEl = $("thumbs");
 const generateBtn = $("generate");
 const progressEl = $("progress");
 const barEl = $("bar");
@@ -129,8 +127,9 @@ const clearPodcastVideoBtn = $("clear-podcast-video");
 const podcastVideoName = $("podcast-video-name");
 const podcastDropCard = $("podcast-drop-card");
 
-let currentImage = null; // { base64, mediaType }
+let currentImages = []; // [{ base64, dataUrl }] — several = an Instagram carousel
 let currentVideo = null; // File (story/reel video)
+let currentVideoPoster = null; // dataUrl for the video's thumbnail
 let podcastVideo = null; // File (podcast episode video)
 let currentTopic = "other";
 let hashtagsAdded = false;
@@ -200,63 +199,104 @@ function prettySize(bytes) {
     : Math.round(bytes / (1024 * 1024)) + " MB";
 }
 
-// ----- story tab: one box takes an image OR a video -----
+// ----- story tab: one box takes several images (carousel) OR one video -----
 pickImageBtn.addEventListener("click", () => imageInput.click());
 
-function handleStoryFile(file) {
-  if (!file) return;
+const MAX_CAROUSEL = 10;
 
-  if (file.type.startsWith("video/")) {
-    currentVideo = file;
-    currentImage = null;
-    storyFileName.textContent = `${file.name} (${prettySize(file.size)})`;
-    videoPoster(file, (dataUrl) => {
-      if (dataUrl) {
-        thumbEl.src = dataUrl;
-        thumbBox.hidden = false;
-      }
+function renderStoryThumbs() {
+  thumbsEl.innerHTML = "";
+
+  const addItem = (src, onRemove) => {
+    const item = document.createElement("div");
+    item.className = "thumb-item";
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = "Uploaded preview";
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "thumb-clear";
+    del.title = "Remove";
+    del.textContent = "×";
+    del.addEventListener("click", onRemove);
+    item.append(img, del);
+    thumbsEl.appendChild(item);
+  };
+
+  if (currentVideo && currentVideoPoster) {
+    addItem(currentVideoPoster, () => {
+      currentVideo = null;
+      currentVideoPoster = null;
+      imageInput.value = "";
+      renderStoryThumbs();
+    });
+  }
+  currentImages.forEach((im, idx) => {
+    addItem(im.dataUrl, () => {
+      currentImages.splice(idx, 1);
+      renderStoryThumbs();
+    });
+  });
+
+  storyFileName.textContent = currentVideo
+    ? `${currentVideo.name} (${prettySize(currentVideo.size)})`
+    : currentImages.length
+      ? `${currentImages.length} image${currentImages.length > 1 ? "s — carousel" : ""}`
+      : "";
+
+  if (!currentVideo && !currentImages.length) {
+    dropCard.classList.remove("glow-sweep", "has-image");
+  }
+}
+
+function handleStoryFiles(fileList) {
+  const files = [...(fileList || [])];
+  if (!files.length) return;
+
+  // a video takes over the box; images stack up into a carousel
+  const video = files.find((f) => f.type.startsWith("video/"));
+  if (video) {
+    currentVideo = video;
+    currentImages = [];
+    currentVideoPoster = null;
+    renderStoryThumbs();
+    videoPoster(video, (dataUrl) => {
+      currentVideoPoster = dataUrl;
+      renderStoryThumbs();
     });
     sweepGlow(dropCard, true);
     return;
   }
 
-  if (!file.type.startsWith("image/")) return;
-  const img = new Image();
-  const url = URL.createObjectURL(file);
-  img.onload = () => {
-    const MAX = 1568;
-    let { width, height } = img;
-    const scale = Math.min(1, MAX / Math.max(width, height));
-    width = Math.round(width * scale);
-    height = Math.round(height * scale);
+  for (const file of files.filter((f) => f.type.startsWith("image/"))) {
+    if (currentImages.length >= MAX_CAROUSEL) break;
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 1568;
+      let { width, height } = img;
+      const scale = Math.min(1, MAX / Math.max(width, height));
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
 
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
-    currentImage = { base64: dataUrl.split(",")[1], mediaType: "image/jpeg" };
-    currentVideo = null;
-    storyFileName.textContent = "";
-    thumbEl.src = dataUrl;
-    thumbBox.hidden = false;
-    URL.revokeObjectURL(url);
-    sweepGlow(dropCard, true);
-  };
-  img.src = url;
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.88);
+      currentImages.push({ base64: dataUrl.split(",")[1], dataUrl });
+      currentVideo = null;
+      currentVideoPoster = null;
+      URL.revokeObjectURL(url);
+      renderStoryThumbs();
+      sweepGlow(dropCard, true);
+    };
+    img.src = url;
+  }
 }
 
-imageInput.addEventListener("change", () => handleStoryFile(imageInput.files[0]));
-
-clearImageBtn.addEventListener("click", () => {
-  currentImage = null;
-  currentVideo = null;
-  imageInput.value = "";
-  thumbBox.hidden = true;
-  storyFileName.textContent = "";
-  dropCard.classList.remove("glow-sweep", "has-image");
-});
+imageInput.addEventListener("change", () => handleStoryFiles(imageInput.files));
 
 // ----- podcast tab: episode video box -----
 pickPodcastVideoBtn.addEventListener("click", () => podcastVideoInput.click());
@@ -302,9 +342,11 @@ function wireDrop(card, onFile) {
       card.classList.remove("drag-over");
     })
   );
-  card.addEventListener("drop", (e) => onFile(e.dataTransfer?.files?.[0]));
+  card.addEventListener("drop", (e) =>
+    onFile(e.dataTransfer?.files?.[0], e.dataTransfer?.files)
+  );
 }
-wireDrop(dropCard, handleStoryFile);
+wireDrop(dropCard, (f, all) => handleStoryFiles(all || [f]));
 wireDrop(podcastDropCard, handlePodcastFile);
 
 // ---------------------------------------------------------------------------
@@ -552,8 +594,8 @@ generateBtn.addEventListener("click", async () => {
 
   // validation
   if (runMode === "story") {
-    if (!briefEl.value.trim() && !currentImage && !videoFile) {
-      showError("Give me a brief, an image, or a video.");
+    if (!briefEl.value.trim() && !currentImages.length && !videoFile) {
+      showError("Give me a brief, images, or a video.");
       return;
     }
   } else if (!videoFile && !podcastUrlEl.value.trim() && !podcastTranscriptEl.value.trim()) {
@@ -565,7 +607,7 @@ generateBtn.addEventListener("click", async () => {
   generateBtn.disabled = true;
   progressEl.hidden = false;
   progress.set(0, "starting…");
-  document.body.classList.add("generating"); // cue the light show
+  startLightShow(); // a different show each time
 
   try {
     // 1–3. video stages (only when a file was dropped)
@@ -580,8 +622,7 @@ generateBtn.addEventListener("click", async () => {
       endpoint = "/api/generate";
       payload = {
         brief: briefEl.value.trim(),
-        imageBase64: currentImage?.base64,
-        imageMediaType: currentImage?.mediaType,
+        images: currentImages.map((im) => im.base64),
         videoTranscript: videoData?.transcript,
         frames: videoData?.frames,
       };
@@ -624,11 +665,27 @@ generateBtn.addEventListener("click", async () => {
     etaEl.textContent = "Error — try again";
     showError(String(e.message || e));
   } finally {
-    document.body.classList.remove("generating");
+    stopLightShow();
     generateBtn.disabled = false;
     setTimeout(() => (progressEl.hidden = true), 1500);
   }
 });
+
+// ----- light show variants: a different mood each generation -----
+const FX_VARIANTS = ["fx-classic", "fx-pulse", "fx-bars"];
+let lastFx = null;
+
+function startLightShow() {
+  // never the same show twice in a row
+  const options = FX_VARIANTS.filter((v) => v !== lastFx);
+  const pick = options[Math.floor(Math.random() * options.length)];
+  lastFx = pick;
+  document.body.classList.add("generating", pick);
+}
+
+function stopLightShow() {
+  document.body.classList.remove("generating", ...FX_VARIANTS);
+}
 
 let lastRun = null; // { endpoint, payload, runMode } of the latest generation
 
@@ -699,7 +756,7 @@ async function sendFeedback() {
   sendFeedbackBtn.disabled = true;
   generateBtn.disabled = true;
   progressEl.hidden = false;
-  document.body.classList.add("generating"); // cue the light show
+  startLightShow();
   progress.creep(0, 0.95, getEta(lastRun.runMode), () => "rewriting with your note…");
 
   try {
@@ -718,7 +775,7 @@ async function sendFeedback() {
     etaEl.textContent = "Error — try again";
     showError(String(e.message || e));
   } finally {
-    document.body.classList.remove("generating");
+    stopLightShow();
     sendFeedbackBtn.disabled = false;
     generateBtn.disabled = false;
     setTimeout(() => (progressEl.hidden = true), 1500);

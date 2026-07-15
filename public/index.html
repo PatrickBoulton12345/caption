@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=13" />
+  <link rel="stylesheet" href="styles.css?v=14" />
 </head>
 <body>
   <!-- Generating light show: colour cascade + glows + pattern (visible only while working) -->
@@ -17,6 +17,7 @@
     <div class="glow glow-blue"></div>
     <div class="glow glow-yellow"></div>
     <div class="pattern"></div>
+    <div class="bars-fx"></div>
   </div>
 
   <!-- LFG graphical motif: progressing colour bars -->
@@ -50,18 +51,15 @@
           <textarea id="brief" rows="5" placeholder="Paste the story, link, or a one-line reel brief…"></textarea>
         </section>
 
-        <!-- 2. Image / video upload / drop zone -->
+        <!-- 2. Images / video upload / drop zone -->
         <section class="card drop-card" id="drop-card">
-          <label class="label" for="image">image or video <span class="optional">(optional — click or drag &amp; drop)</span></label>
+          <label class="label" for="image">images or video <span class="optional">(optional — several images = a carousel, one caption for the set)</span></label>
           <div class="upload-row">
-            <input type="file" id="image" accept="image/png,image/jpeg,image/webp,image/gif,video/*" hidden />
-            <button type="button" id="pick-image" class="btn btn-ghost">choose file</button>
-            <div id="thumb-box" class="thumb-box" hidden>
-              <img id="thumb" alt="Uploaded preview" />
-              <button type="button" id="clear-image" class="thumb-clear" title="Remove">×</button>
-            </div>
+            <input type="file" id="image" accept="image/png,image/jpeg,image/webp,image/gif,video/*" multiple hidden />
+            <button type="button" id="pick-image" class="btn btn-ghost">choose files</button>
             <span id="story-file-name" class="file-name"></span>
           </div>
+          <div id="thumbs" class="thumbs"></div>
         </section>
       </div>
 
@@ -185,6 +183,6 @@
     </aside>
   </div>
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>

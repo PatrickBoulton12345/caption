@@ -35,6 +35,7 @@ export default async function handler(req, res) {
 
   const {
     brief,
+    images,
     imageBase64,
     imageMediaType,
     videoTranscript,
@@ -42,13 +43,14 @@ export default async function handler(req, res) {
     styleNotes,
     revise,
   } = req.body || {};
-  if (!brief && !imageBase64 && !videoTranscript) {
+  const imageList = Array.isArray(images) ? images.filter((s) => typeof s === "string" && s) : [];
+  if (!brief && !imageList.length && !imageBase64 && !videoTranscript) {
     return res
       .status(400)
-      .json({ error: "Provide a brief, an image, a video, or a mix." });
+      .json({ error: "Provide a brief, images, a video, or a mix." });
   }
 
-  // Build the user message: images first (key frame and/or video screenshots),
+  // Build the user message: images first (carousel and/or video screenshots),
   // then the text material
   const content = [];
   if (imageBase64) {
@@ -59,6 +61,12 @@ export default async function handler(req, res) {
         media_type: imageMediaType || "image/jpeg",
         data: imageBase64,
       },
+    });
+  }
+  for (const im of imageList.slice(0, 10)) {
+    content.push({
+      type: "image",
+      source: { type: "base64", media_type: "image/jpeg", data: im },
     });
   }
   if (Array.isArray(frames)) {
@@ -74,6 +82,11 @@ export default async function handler(req, res) {
 
   const textParts = [];
   if (brief) textParts.push(brief);
+  if (imageList.length > 1) {
+    textParts.push(
+      `The ${imageList.length} attached images are an Instagram carousel, in order. Write ONE caption for the whole set — hook on the strongest detail across them.`
+    );
+  }
   if (videoTranscript) {
     textParts.push(
       "TRANSCRIPT OF THE UPLOADED VIDEO (treat this as the reel's content" +
