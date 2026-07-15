@@ -6,19 +6,22 @@
 // ---------------------------------------------------------------------------
 // ETA calibration — rolling average of the last 8 real generation times
 // ---------------------------------------------------------------------------
-const ETA_KEY = "lfg_eta_samples";
+// Story and podcast runs take different amounts of time, so each mode
+// calibrates its own estimate.
+const ETA_KEYS = { story: "lfg_eta_samples", podcast: "lfg_eta_samples_podcast" };
+const ETA_DEFAULTS = { story: 28000, podcast: 50000 };
 
-function getEta() {
-  const s = JSON.parse(localStorage.getItem(ETA_KEY) || "[]");
-  if (!s.length) return 28000; // 28s cold-start estimate
+function getEta(mode) {
+  const s = JSON.parse(localStorage.getItem(ETA_KEYS[mode]) || "[]");
+  if (!s.length) return ETA_DEFAULTS[mode];
   return s.reduce((a, b) => a + b, 0) / s.length;
 }
 
-function recordEta(ms) {
-  const s = JSON.parse(localStorage.getItem(ETA_KEY) || "[]");
+function recordEta(mode, ms) {
+  const s = JSON.parse(localStorage.getItem(ETA_KEYS[mode]) || "[]");
   s.push(ms);
   while (s.length > 8) s.shift();
-  localStorage.setItem(ETA_KEY, JSON.stringify(s));
+  localStorage.setItem(ETA_KEYS[mode], JSON.stringify(s));
 }
 
 // ---------------------------------------------------------------------------
@@ -92,19 +95,54 @@ const sourcesPanel = $("sources-panel");
 const searchedBlock = $("searched-block");
 const searchedEl = $("searched");
 
+const tabStory = $("tab-story");
+const tabPodcast = $("tab-podcast");
+const storyPanel = $("story-panel");
+const podcastPanel = $("podcast-panel");
+const podcastUrlEl = $("podcast-url");
+const podcastGuestsEl = $("podcast-guests");
+const podcastTitleEl = $("podcast-title");
+const podcastTranscriptEl = $("podcast-transcript");
+const aboutCard = $("about-card");
+const aboutText = $("about-text");
+const whyText = $("why-text");
+const thumbnailCard = $("thumbnail-card");
+const thumbnailPromptEl = $("thumbnail-prompt");
+const copyThumbnailBtn = $("copy-thumbnail");
+
 let currentImage = null; // { base64, mediaType }
 let currentTopic = "other";
 let hashtagsAdded = false;
+let mode = "story"; // "story" | "podcast"
+
+// ---------------------------------------------------------------------------
+// Mode tabs
+// ---------------------------------------------------------------------------
+function setMode(next) {
+  mode = next;
+  const story = mode === "story";
+  storyPanel.hidden = !story;
+  podcastPanel.hidden = story;
+  tabStory.classList.toggle("active", story);
+  tabPodcast.classList.toggle("active", !story);
+  tabStory.setAttribute("aria-selected", String(story));
+  tabPodcast.setAttribute("aria-selected", String(!story));
+  generateBtn.textContent = story ? "generate caption" : "read podcast & generate";
+  errorEl.hidden = true;
+}
+tabStory.addEventListener("click", () => setMode("story"));
+tabPodcast.addEventListener("click", () => setMode("podcast"));
 
 // ---------------------------------------------------------------------------
 // Image upload — downscale to max 1568px long edge so uploads stay small
 // and image tokens stay cheap
 // ---------------------------------------------------------------------------
+const dropCard = $("drop-card");
+
 pickImageBtn.addEventListener("click", () => imageInput.click());
 
-imageInput.addEventListener("change", () => {
-  const file = imageInput.files[0];
-  if (!file) return;
+function handleImageFile(file) {
+  if (!file || !file.type.startsWith("image/")) return;
   const img = new Image();
   const url = URL.createObjectURL(file);
   img.onload = () => {
@@ -127,31 +165,86 @@ imageInput.addEventListener("change", () => {
     thumbEl.src = dataUrl;
     thumbBox.hidden = false;
     URL.revokeObjectURL(url);
+
+    // orange glow: sweeps from the top of the box downwards, then settles
+    dropCard.classList.remove("glow-sweep", "has-image");
+    void dropCard.offsetWidth; // restart the animation if it already ran
+    dropCard.classList.add("glow-sweep");
   };
   img.src = url;
+}
+
+dropCard.addEventListener("animationend", () => {
+  dropCard.classList.remove("glow-sweep");
+  if (currentImage) dropCard.classList.add("has-image");
+});
+
+imageInput.addEventListener("change", () => handleImageFile(imageInput.files[0]));
+
+// drag & drop onto the box
+["dragenter", "dragover"].forEach((evt) =>
+  dropCard.addEventListener(evt, (e) => {
+    e.preventDefault();
+    dropCard.classList.add("drag-over");
+  })
+);
+["dragleave", "drop"].forEach((evt) =>
+  dropCard.addEventListener(evt, (e) => {
+    e.preventDefault();
+    dropCard.classList.remove("drag-over");
+  })
+);
+dropCard.addEventListener("drop", (e) => {
+  handleImageFile(e.dataTransfer?.files?.[0]);
 });
 
 clearImageBtn.addEventListener("click", () => {
   currentImage = null;
   imageInput.value = "";
   thumbBox.hidden = true;
+  dropCard.classList.remove("glow-sweep", "has-image");
 });
 
 // ---------------------------------------------------------------------------
 // Generate flow with time-estimate-driven progress bar
 // ---------------------------------------------------------------------------
 generateBtn.addEventListener("click", async () => {
-  const brief = briefEl.value.trim();
-  if (!brief && !currentImage) {
-    showError("Give me a brief, an image, or both.");
-    return;
+  let endpoint, payload;
+
+  if (mode === "story") {
+    const brief = briefEl.value.trim();
+    if (!brief && !currentImage) {
+      showError("Give me a brief, an image, or both.");
+      return;
+    }
+    endpoint = "/api/generate";
+    payload = {
+      brief,
+      imageBase64: currentImage?.base64,
+      imageMediaType: currentImage?.mediaType,
+    };
+  } else {
+    const youtubeUrl = podcastUrlEl.value.trim();
+    const transcript = podcastTranscriptEl.value.trim();
+    if (!youtubeUrl && !transcript) {
+      showError("Give me the YouTube link (or paste the transcript).");
+      return;
+    }
+    endpoint = "/api/podcast";
+    payload = {
+      youtubeUrl,
+      transcript,
+      guests: podcastGuestsEl.value.trim(),
+      title: podcastTitleEl.value.trim(),
+    };
   }
 
   errorEl.hidden = true;
   generateBtn.disabled = true;
   progressEl.hidden = false;
 
-  const eta = getEta();
+  const runMode = mode;
+  const eta = getEta(runMode);
   const start = performance.now();
   let raf;
   let done = false;
@@ -167,14 +260,10 @@ generateBtn.addEventListener("click", async () => {
   tick();
 
   try {
-    const resp = await fetch("/api/generate", {
+    const resp = await fetch(endpoint, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        brief,
-        imageBase64: currentImage?.base64,
-        imageMediaType: currentImage?.mediaType,
-      }),
+      body: JSON.stringify(payload),
     });
     const data = await resp.json();
 
@@ -186,10 +275,10 @@ generateBtn.addEventListener("click", async () => {
     if (!resp.ok) {
       throw new Error(data.error?.message || data.error || `Server error (${resp.status})`);
     }
-    recordEta(performance.now() - start);
+    recordEta(runMode, performance.now() - start);
 
     const result = parseModelJson(data);
-    renderResult(result, extractSearchedPages(data));
+    renderResult(result, extractSearchedPages(data), runMode);
   } catch (e) {
     done = true;
     cancelAnimationFrame(raf);
@@ -242,12 +331,20 @@ function showError(msg) {
 // ---------------------------------------------------------------------------
 // Render results
 // ---------------------------------------------------------------------------
-function renderResult(result, searchedPages = []) {
+function renderResult(result, searchedPages = [], runMode = "story") {
   currentTopic = result.topic || "other";
   hashtagsAdded = false;
 
   captionEl.value = result.caption || "";
   topicBadge.textContent = currentTopic;
+
+  // Podcast extras: the explainer (for writing the title) + Gemini thumbnail prompt
+  const isPodcast = runMode === "podcast";
+  aboutCard.hidden = !isPodcast || !(result.about || result.why_it_matters);
+  aboutText.textContent = result.about || "";
+  whyText.textContent = result.why_it_matters || "";
+  thumbnailCard.hidden = !isPodcast || !result.thumbnail_prompt;
+  thumbnailPromptEl.value = result.thumbnail_prompt || "";
 
   // Hashtag chips: Claude's fresh picks pre-selected, learned + evergreen after
   chipsEl.innerHTML = "";
@@ -368,4 +465,11 @@ copyBtn.addEventListener("click", async () => {
   const old = copyBtn.textContent;
   copyBtn.textContent = "copied ✓";
   setTimeout(() => (copyBtn.textContent = old), 1500);
+});
+
+copyThumbnailBtn.addEventListener("click", async () => {
+  await navigator.clipboard.writeText(thumbnailPromptEl.value);
+  const old = copyThumbnailBtn.textContent;
+  copyThumbnailBtn.textContent = "copied ✓";
+  setTimeout(() => (copyThumbnailBtn.textContent = old), 1500);
 });

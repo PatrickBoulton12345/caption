@@ -70,6 +70,22 @@ h1 {
 
 .tagline { margin-top: 10px; font-size: 1.05rem; max-width: 46ch; }
 
+/* Mode tabs */
+.tabs { display: flex; gap: 0; margin-bottom: 18px; }
+.tab {
+  font: inherit;
+  font-weight: 700;
+  text-transform: lowercase;
+  font-size: 1.02rem;
+  padding: 10px 22px;
+  background: var(--paper);
+  border: 2px solid var(--black);
+  cursor: pointer;
+}
+.tab + .tab { border-left: none; }
+.tab.active { background: var(--black); color: var(--cream); }
+.tab:not(.active):hover { background: var(--yellow); }
+
 .card {
   background: var(--paper);
   border: 2px solid var(--black);
@@ -98,8 +114,9 @@ textarea, input[type="text"] {
   resize: vertical;
 }
 textarea:focus, input[type="text"]:focus {
-  outline: 3px solid var(--blue);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--black);
+  box-shadow: 0 0 0 3px rgba(121, 202, 196, 0.9), 0 0 18px 4px rgba(121, 202, 196, 0.55);
 }
 
 /* Buttons */
@@ -122,7 +139,35 @@ textarea:focus, input[type="text"]:focus {
 .btn-ghost { background: #fff; color: var(--black); }
 .btn-ghost:hover { background: var(--yellow); }
 
-/* Image upload */
+/* Image upload / drop zone */
+.drop-card { transition: box-shadow 0.2s ease; }
+
+/* while dragging a file over the box */
+.drop-card.drag-over {
+  box-shadow: 0 0 0 3px rgba(254, 85, 0, 0.6), 0 0 16px 3px rgba(254, 85, 0, 0.35);
+}
+
+/* on drop: the orange glow starts at the top edge, wraps the box, then
+   travels down and settles */
+@keyframes glow-sweep {
+  0% {
+    box-shadow: 0 -16px 26px -8px var(--orange);
+  }
+  35% {
+    box-shadow: 0 -4px 20px 0 rgba(254, 85, 0, 0.85), 0 0 10px 0 rgba(254, 85, 0, 0.4);
+  }
+  70% {
+    box-shadow: 0 12px 26px -4px var(--orange), 0 0 14px 2px rgba(254, 85, 0, 0.5);
+  }
+  100% {
+    box-shadow: 0 0 16px 3px rgba(254, 85, 0, 0.55);
+  }
+}
+.drop-card.glow-sweep { animation: glow-sweep 0.9s ease-out forwards; }
+
+/* steady glow while an image is loaded */
+.drop-card.has-image { box-shadow: 0 0 16px 3px rgba(254, 85, 0, 0.55); }
+
 .upload-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .thumb-box { position: relative; }
 .thumb-box img {
@@ -235,6 +280,10 @@ textarea:focus, input[type="text"]:focus {
 .sourcing .claim { font-weight: 700; display: block; }
 .sourcing .source { opacity: 0.75; display: block; margin-top: 2px; overflow-wrap: anywhere; }
 .sourcing a { color: var(--black); text-decoration-color: var(--orange); text-decoration-thickness: 2px; }
+
+/* Podcast explainer card */
+.explainer { border-left: 10px solid var(--blue); }
+.explainer p:not(.label) { font-size: 0.98rem; }
 
 /* Sources panel */
 .sources-card { border-left: 10px solid var(--orange); }

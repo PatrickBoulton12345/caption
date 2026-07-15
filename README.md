@@ -4,6 +4,16 @@ Turns a story, image, or reel brief into one publish-ready TikTok / Instagram
 caption in the LFG house style — fact-checked live against the web, with a
 claims-and-sources panel so nothing gets published without the checks visible.
 
+Two modes:
+
+- **story / reel** — paste a story or one-line brief, optionally drop in a key
+  frame image, get a caption.
+- **podcast** — paste the YouTube link to a full episode. The site fetches the
+  episode's subtitles and reads the whole thing, then gives you: a plain-English
+  explainer (what it's about + why it matters, so you can write the title), the
+  caption, hashtags, sources, and a ready-to-paste Gemini prompt for a striking
+  guest thumbnail in LFG colours.
+
 ## How it works
 
 - **Frontend** (`/public`) — a single page. You paste a brief and/or upload a
@@ -39,9 +49,14 @@ claims-and-sources panel so nothing gets published without the checks visible.
   Vercel KV behind a small `/api/hashtags` route.)
 - **Images** are resized in the browser before upload (max 1568px on the long
   edge), which keeps uploads fast and costs down.
-- **Guardrails** — the key stays server-side only, and the generate route has a
-  simple per-visitor limit (20 generations per hour) so a stray loop can't burn
-  the budget.
+- **Podcasts** — Claude can't watch video, so podcast mode works from the
+  episode's subtitles, fetched automatically from YouTube. If a video has no
+  subtitles, open it on YouTube → "…" → "Show transcript", copy, and paste it
+  into the transcript box instead. You write the episode title; the site gives
+  you the explainer to inform it.
+- **Guardrails** — the key stays server-side only, and both routes have a
+  simple per-visitor limit (20 caption / 10 podcast runs per hour) so a stray
+  loop can't burn the budget.
 - **Model** — currently `claude-sonnet-5` with the `web_search_20260209` search
   tool (both current as of July 2026). Swap the model to `claude-opus-4-8` in
   `/api/generate.js` for maximum quality at higher cost.

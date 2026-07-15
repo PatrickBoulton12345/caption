@@ -27,24 +27,54 @@
         <p class="tagline">Paste a story, drop a key frame, get a publish-ready caption — fact-checked live against the web, in the LFG voice.</p>
       </header>
 
-      <!-- 1. Brief -->
-      <section class="card">
-        <label class="label" for="brief">the brief</label>
-        <textarea id="brief" rows="5" placeholder="Paste the story, link, or a one-line reel brief…"></textarea>
-      </section>
+      <!-- Mode tabs -->
+      <nav class="tabs" role="tablist">
+        <button type="button" id="tab-story" class="tab active" role="tab" aria-selected="true">story / reel</button>
+        <button type="button" id="tab-podcast" class="tab" role="tab" aria-selected="false">podcast</button>
+      </nav>
 
-      <!-- 2. Image upload -->
-      <section class="card">
-        <label class="label" for="image">image / key frame <span class="optional">(optional)</span></label>
-        <div class="upload-row">
-          <input type="file" id="image" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
-          <button type="button" id="pick-image" class="btn btn-ghost">choose image</button>
-          <div id="thumb-box" class="thumb-box" hidden>
-            <img id="thumb" alt="Uploaded key frame preview" />
-            <button type="button" id="clear-image" class="thumb-clear" title="Remove image">×</button>
+      <!-- ===== STORY / REEL MODE ===== -->
+      <div id="story-panel">
+        <!-- 1. Brief -->
+        <section class="card">
+          <label class="label" for="brief">the brief</label>
+          <textarea id="brief" rows="5" placeholder="Paste the story, link, or a one-line reel brief…"></textarea>
+        </section>
+
+        <!-- 2. Image upload / drop zone -->
+        <section class="card drop-card" id="drop-card">
+          <label class="label" for="image">image / key frame <span class="optional">(optional — click or drag &amp; drop)</span></label>
+          <div class="upload-row">
+            <input type="file" id="image" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+            <button type="button" id="pick-image" class="btn btn-ghost">choose image</button>
+            <div id="thumb-box" class="thumb-box" hidden>
+              <img id="thumb" alt="Uploaded key frame preview" />
+              <button type="button" id="clear-image" class="thumb-clear" title="Remove image">×</button>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </div>
+
+      <!-- ===== PODCAST MODE ===== -->
+      <div id="podcast-panel" hidden>
+        <section class="card">
+          <label class="label" for="podcast-url">youtube link</label>
+          <input type="text" id="podcast-url" placeholder="https://www.youtube.com/watch?v=…" />
+          <p class="hint" style="margin-top:8px">The episode's subtitles are fetched and read in full — no need to summarise anything yourself.</p>
+        </section>
+
+        <section class="card">
+          <label class="label" for="podcast-guests">guest name(s) <span class="optional">(recommended — used in the thumbnail prompt)</span></label>
+          <input type="text" id="podcast-guests" placeholder="e.g. Sam Dumitriu, policy researcher at Britain Remade" />
+          <label class="label" for="podcast-title" style="margin-top:14px">your title <span class="optional">(optional — you write the title, this just informs the caption &amp; thumbnail)</span></label>
+          <input type="text" id="podcast-title" placeholder="e.g. why britain can't build anything" />
+        </section>
+
+        <section class="card">
+          <label class="label" for="podcast-transcript">transcript <span class="optional">(only needed if the video has no subtitles)</span></label>
+          <textarea id="podcast-transcript" rows="4" placeholder="On YouTube: … → Show transcript → copy → paste here"></textarea>
+        </section>
+      </div>
 
       <!-- 3. Generate + progress -->
       <section class="card">
@@ -58,6 +88,14 @@
 
       <!-- 4–5. Results -->
       <div id="results" hidden>
+        <!-- Podcast explainer: what it's about + why it matters (for writing the title) -->
+        <section id="about-card" class="card explainer" hidden>
+          <p class="label">what this episode is about</p>
+          <p id="about-text"></p>
+          <p class="label" style="margin-top:16px">why it matters</p>
+          <p id="why-text"></p>
+        </section>
+
         <section class="card">
           <label class="label" for="caption">the caption <span id="topic-badge" class="topic-badge"></span></label>
           <textarea id="caption" rows="12"></textarea>
@@ -73,6 +111,16 @@
           <div class="action-row">
             <button type="button" id="add-to-caption" class="btn btn-blue">add to caption</button>
             <button type="button" id="copy" class="btn btn-primary">copy caption</button>
+          </div>
+        </section>
+
+        <!-- Gemini thumbnail prompt (podcast mode) -->
+        <section id="thumbnail-card" class="card" hidden>
+          <label class="label" for="thumbnail-prompt">thumbnail prompt for gemini</label>
+          <p class="hint">Paste this into Gemini along with photos of the guest(s).</p>
+          <textarea id="thumbnail-prompt" rows="8"></textarea>
+          <div class="action-row" style="margin-top:12px">
+            <button type="button" id="copy-thumbnail" class="btn btn-blue">copy thumbnail prompt</button>
           </div>
         </section>
       </div>

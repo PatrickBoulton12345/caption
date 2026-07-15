@@ -2,6 +2,9 @@
   "functions": {
     "api/generate.js": {
       "maxDuration": 60
+    },
+    "api/podcast.js": {
+      "maxDuration": 60
     }
   }
 }
