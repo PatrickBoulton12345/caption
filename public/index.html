@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>caption generator — looking for growth</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- LFG graphical motif: progressing colour bars -->
+  <div class="motif" aria-hidden="true">
+    <div class="bar bar-yellow"></div>
+    <div class="bar bar-orange"></div>
+    <div class="bar bar-blue"></div>
+    <div class="bar bar-black"></div>
+  </div>
+
+  <div class="layout">
+    <!-- ============ MAIN COLUMN ============ -->
+    <main class="main-col">
+      <header>
+        <p class="wordmark">looking<span>for</span>growth<em>.uk</em></p>
+        <h1>caption generator</h1>
+        <p class="tagline">Paste a story, drop a key frame, get a publish-ready caption — fact-checked live against the web, in the LFG voice.</p>
+      </header>
+
+      <!-- 1. Brief -->
+      <section class="card">
+        <label class="label" for="brief">the brief</label>
+        <textarea id="brief" rows="5" placeholder="Paste the story, link, or a one-line reel brief…"></textarea>
+      </section>
+
+      <!-- 2. Image upload -->
+      <section class="card">
+        <label class="label" for="image">image / key frame <span class="optional">(optional)</span></label>
+        <div class="upload-row">
+          <input type="file" id="image" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+          <button type="button" id="pick-image" class="btn btn-ghost">choose image</button>
+          <div id="thumb-box" class="thumb-box" hidden>
+            <img id="thumb" alt="Uploaded key frame preview" />
+            <button type="button" id="clear-image" class="thumb-clear" title="Remove image">×</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. Generate + progress -->
+      <section class="card">
+        <button type="button" id="generate" class="btn btn-primary">generate caption</button>
+        <div id="progress" class="progress" hidden>
+          <div class="track"><div id="bar" class="fill"></div></div>
+          <p id="eta" class="eta">~28s remaining</p>
+        </div>
+        <p id="error" class="error" hidden></p>
+      </section>
+
+      <!-- 4–5. Results -->
+      <div id="results" hidden>
+        <section class="card">
+          <label class="label" for="caption">the caption <span id="topic-badge" class="topic-badge"></span></label>
+          <textarea id="caption" rows="12"></textarea>
+        </section>
+
+        <section class="card">
+          <p class="label">hashtags <span class="optional">— orange dot = learned favourite</span></p>
+          <div id="chips" class="chips"></div>
+          <div class="add-row">
+            <input type="text" id="new-tag" placeholder="add your own, e.g. #planning" />
+            <button type="button" id="add-tag" class="btn btn-ghost">add</button>
+          </div>
+          <div class="action-row">
+            <button type="button" id="add-to-caption" class="btn btn-blue">add to caption</button>
+            <button type="button" id="copy" class="btn btn-primary">copy caption</button>
+          </div>
+        </section>
+      </div>
+
+      <footer>
+        <p>built for the lfg social team · captions are drafts — read before you post</p>
+      </footer>
+    </main>
+
+    <!-- ============ SOURCES PANEL (right-hand side) ============ -->
+    <aside id="sources-panel" class="sources-col" hidden>
+      <div class="card sources-card">
+        <p class="label">claims &amp; sources</p>
+        <p class="hint">Every load-bearing claim, checked against the web before publish. "Softest" is the one a critic would attack first.</p>
+        <ul id="sourcing" class="sourcing"></ul>
+
+        <div id="searched-block" hidden>
+          <p class="label sub-label">pages consulted</p>
+          <ul id="searched" class="searched"></ul>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
