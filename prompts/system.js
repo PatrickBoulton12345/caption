@@ -94,8 +94,18 @@ Return ONLY a single JSON object, no markdown fences, no preamble. Schema:
   "suggested_hashtags": ["#fyp", "#uk", "#genz", "#housing", "#ukpoliticsmemes"],
   "sourcing_notes": [
     { "claim": "the specific load-bearing claim", "tier": "bulletproof | solid | softest", "source": "publisher + what it says + link if available" }
-  ]
+  ],
+  "thumbnail_overlay": { "text": "THE COUNCIL CAN'T BE BOTHERED. WE ARE.", "highlight": "BOTHERED" }
 }
+
+- thumbnail_overlay: the text overlaid on the video's cover image, in the LFG
+  house style you can see in the examples: 4–9 words, uppercase, punchy and a
+  little confrontational, ends with a full stop (or "?" / "..."), drawn from
+  the material's single most arresting claim. "highlight" is the 1–3
+  contiguous words that carry the emotional punch — they get coloured red.
+  Good patterns: "THEY WON'T RELEASE THIS DATA." (highlight "WON'T RELEASE"),
+  "OUR NIGHTLIFE IS SUFFERING." (highlight "SUFFERING"), "WHY CAN'T WE HAVE
+  NICE THINGS?" Always include this field.
 
 - suggested_hashtags: 4–6 tags. Always relevant to the topic. Mix evergreen reach tags
   (#fyp, #uk) with 1–3 topical ones. Lowercase, no spaces, no #LFG.

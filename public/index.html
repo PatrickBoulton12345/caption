@@ -7,7 +7,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,900&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="stylesheet" href="octarine.css" />
+  <link rel="stylesheet" href="styles.css?v=15" />
 </head>
 <body>
   <!-- Generating light show: colour cascade + glows + pattern (visible only while working) -->
@@ -141,6 +142,26 @@
           </div>
         </section>
 
+        <!-- Thumbnail maker: video frame + catchy line + coloured words + download -->
+        <section id="thumb-maker" class="card" hidden>
+          <p class="label">thumbnail</p>
+          <p class="hint">Pick a background, tweak the line, drag the preview to reframe, download. Suggested line and red words come from the video.</p>
+          <div id="frame-strip" class="frame-strip"></div>
+          <div class="upload-row" style="margin:10px 0 14px">
+            <input type="file" id="thumb-image" accept="image/*" hidden />
+            <button type="button" id="pick-thumb-image" class="btn btn-ghost">use another image</button>
+          </div>
+          <label class="label sub-label" for="overlay-text">the line</label>
+          <input type="text" id="overlay-text" />
+          <label class="label sub-label" for="overlay-highlight" style="margin-top:12px">words to colour <span class="optional">(comma-separate several phrases)</span></label>
+          <input type="text" id="overlay-highlight" />
+          <div id="overlay-swatches" class="swatches"></div>
+          <div class="canvas-holder"><canvas id="thumb-canvas" width="1080" height="1920"></canvas></div>
+          <div class="action-row" style="margin-top:12px">
+            <button type="button" id="download-thumb" class="btn btn-primary">download thumbnail</button>
+          </div>
+        </section>
+
         <!-- Feedback: rewrite now + remember for every future caption -->
         <section id="feedback-card" class="card feedback-card">
           <label class="label" for="feedback">teach it <span class="optional">— what should be different?</span></label>
@@ -183,6 +204,6 @@
     </aside>
   </div>
 
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

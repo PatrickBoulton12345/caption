@@ -424,6 +424,39 @@ textarea:focus, input[type="text"]:focus {
 .sourcing .source { opacity: 0.75; display: block; margin-top: 2px; overflow-wrap: anywhere; }
 .sourcing a { color: var(--black); text-decoration-color: var(--orange); text-decoration-thickness: 2px; }
 
+/* Thumbnail maker */
+.frame-strip { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.frame-strip:empty { display: none; }
+.frame-strip img {
+  height: 72px;
+  border: 2px solid var(--black);
+  cursor: pointer;
+  opacity: 0.65;
+  flex-shrink: 0;
+}
+.frame-strip img.selected { outline: 3px solid var(--orange); opacity: 1; }
+
+.swatches { display: flex; gap: 8px; margin-top: 10px; }
+.swatches .swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--black);
+  cursor: pointer;
+}
+.swatches .swatch.selected { outline: 3px solid var(--blue); outline-offset: 1px; }
+
+.canvas-holder { margin-top: 14px; display: flex; justify-content: center; }
+#thumb-canvas {
+  width: 100%;
+  max-width: 300px;
+  border: 2px solid var(--black);
+  touch-action: none;
+  cursor: grab;
+  background: #000;
+}
+#thumb-canvas:active { cursor: grabbing; }
+
 /* Feedback / lessons */
 .feedback-card { border-left: 10px solid var(--black); }
 .lessons { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }

@@ -786,6 +786,239 @@ feedbackEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") sendFeedback();
 });
 
+// ----- thumbnail maker (same mechanics as the LFG card creator) -----
+const thumbMaker = $("thumb-maker");
+const frameStrip = $("frame-strip");
+const overlayTextEl = $("overlay-text");
+const overlayHighlightEl = $("overlay-highlight");
+const overlaySwatchesEl = $("overlay-swatches");
+const thumbCanvas = $("thumb-canvas");
+const thumbCtx = thumbCanvas.getContext("2d");
+const downloadThumbBtn = $("download-thumb");
+const thumbImageInput = $("thumb-image");
+const pickThumbImageBtn = $("pick-thumb-image");
+
+const TW = 1080; // 9:16 reel cover, like the card creator
+const TH = 1920;
+const THUMB_SWATCHES = [
+  { hex: "#FF0000", name: "Red" },
+  { hex: "#FE5500", name: "Orange" },
+  { hex: "#EE9944", name: "Yellow" },
+  { hex: "#79CAC4", name: "Blue" },
+  { hex: "#FFFFFF", name: "White" },
+];
+let thumbColour = "#FF0000"; // red ideally
+let thumbImage = null;
+let thumbPanX = 0;
+
+// colour swatches (red pre-selected)
+THUMB_SWATCHES.forEach((c) => {
+  const sw = document.createElement("div");
+  sw.className = "swatch" + (c.hex === thumbColour ? " selected" : "");
+  sw.style.background = c.hex;
+  sw.title = c.name;
+  sw.addEventListener("click", () => {
+    overlaySwatchesEl.querySelectorAll(".swatch").forEach((s) => s.classList.remove("selected"));
+    sw.classList.add("selected");
+    thumbColour = c.hex;
+    renderThumb();
+  });
+  overlaySwatchesEl.appendChild(sw);
+});
+
+function setThumbImage(src) {
+  const img = new Image();
+  img.onload = () => {
+    thumbImage = img;
+    thumbPanX = 0;
+    renderThumb();
+  };
+  img.src = src;
+}
+
+function renderThumb() {
+  const ctx = thumbCtx;
+  ctx.clearRect(0, 0, TW, TH);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, TW, TH);
+
+  // background image, drawn to cover, horizontally pannable
+  if (thumbImage) {
+    const img = thumbImage;
+    const imgRatio = img.width / img.height;
+    const canvasRatio = TW / TH;
+    let sx, sy, sw, sh;
+    if (imgRatio > canvasRatio) {
+      sh = img.height;
+      sw = img.height * canvasRatio;
+      const maxPan = (img.width - sw) / 2;
+      thumbPanX = Math.max(-maxPan, Math.min(maxPan, thumbPanX));
+      sx = (img.width - sw) / 2 + thumbPanX;
+      sy = 0;
+    } else {
+      sw = img.width;
+      sh = img.width / canvasRatio;
+      sx = 0;
+      sy = (img.height - sh) / 2;
+    }
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, TW, TH);
+  }
+
+  const phrase = overlayTextEl.value.trim().toUpperCase();
+  if (!phrase) return;
+
+  const padding = 120;
+  const maxWidth = TW - padding * 2;
+  const fontSize = 92;
+  const lineHeight = fontSize * 1.15;
+  ctx.font = `700 ${fontSize}px Octarine, Arial, sans-serif`;
+  ctx.textBaseline = "top";
+
+  // word wrap
+  const words = phrase.split(/\s+/);
+  const lines = [];
+  let currentLine = "";
+  for (const word of words) {
+    const testLine = currentLine ? currentLine + " " + word : word;
+    if (ctx.measureText(testLine).width > maxWidth && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = testLine;
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+
+  // black gradient fade behind the text
+  const gradientTop = Math.round(TH * 0.35);
+  const grad = ctx.createLinearGradient(0, gradientTop, 0, TH);
+  grad.addColorStop(0, "rgba(0,0,0,0)");
+  grad.addColorStop(0.25, "rgba(0,0,0,0.5)");
+  grad.addColorStop(0.45, "rgba(0,0,0,0.8)");
+  grad.addColorStop(0.65, "rgba(0,0,0,0.92)");
+  grad.addColorStop(1, "rgba(0,0,0,1)");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, gradientTop, TW, TH - gradientTop);
+
+  // which words get the colour (comma-separated phrases, word-run matching)
+  const colourMap = new Map();
+  const targetPhrases = overlayHighlightEl.value
+    .trim()
+    .toUpperCase()
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  for (const tp of targetPhrases) {
+    const tpWords = tp.split(/\s+/);
+    for (let i = 0; i <= words.length - tpWords.length; i++) {
+      let match = true;
+      for (let k = 0; k < tpWords.length; k++) {
+        if (
+          words[i + k].replace(/[^A-Z0-9]/g, "") !==
+          tpWords[k].replace(/[^A-Z0-9]/g, "")
+        ) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        for (let k = 0; k < tpWords.length; k++) colourMap.set(i + k, thumbColour);
+      }
+    }
+  }
+
+  // draw the lines, lower third — visible in the profile-grid centre crop
+  const textStartY = Math.round(TH * 0.63);
+  let wordIndex = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const y = textStartY + i * lineHeight;
+    let x = padding;
+    for (const w of lines[i].split(/\s+/)) {
+      ctx.fillStyle = colourMap.has(wordIndex) ? colourMap.get(wordIndex) : "#ffffff";
+      ctx.fillText(w, x, y);
+      x += ctx.measureText(w + " ").width;
+      wordIndex++;
+    }
+  }
+}
+
+// drag horizontally to reframe (scaled from on-screen pixels to canvas pixels)
+let thumbDragging = false;
+let thumbDragStartX = 0;
+let thumbPanStart = 0;
+thumbCanvas.addEventListener("pointerdown", (e) => {
+  thumbDragging = true;
+  thumbDragStartX = e.clientX;
+  thumbPanStart = thumbPanX;
+  thumbCanvas.setPointerCapture(e.pointerId);
+});
+thumbCanvas.addEventListener("pointermove", (e) => {
+  if (!thumbDragging || !thumbImage) return;
+  const scale = TW / thumbCanvas.getBoundingClientRect().width;
+  thumbPanX = thumbPanStart - (e.clientX - thumbDragStartX) * scale;
+  renderThumb();
+});
+["pointerup", "pointercancel"].forEach((evt) =>
+  thumbCanvas.addEventListener(evt, () => (thumbDragging = false))
+);
+
+overlayTextEl.addEventListener("input", renderThumb);
+overlayHighlightEl.addEventListener("input", renderThumb);
+
+pickThumbImageBtn.addEventListener("click", () => thumbImageInput.click());
+thumbImageInput.addEventListener("change", () => {
+  const file = thumbImageInput.files[0];
+  if (!file || !file.type.startsWith("image/")) return;
+  const url = URL.createObjectURL(file);
+  setThumbImage(url);
+  frameStrip.querySelectorAll("img").forEach((f) => f.classList.remove("selected"));
+});
+
+downloadThumbBtn.addEventListener("click", () => {
+  renderThumb();
+  const link = document.createElement("a");
+  link.download = "thumbnail.png";
+  link.href = thumbCanvas.toDataURL("image/png");
+  link.click();
+});
+
+// Called after each generation: frames from the video (or uploaded images)
+// become background candidates; Claude's suggested line + red words prefill.
+function setupThumbnail(result) {
+  const frames = lastRun?.payload?.frames || [];
+  const candidates = [
+    ...frames.map((b64) => "data:image/jpeg;base64," + b64),
+    ...currentImages.map((im) => im.dataUrl),
+  ];
+
+  if (!candidates.length) {
+    thumbMaker.hidden = true;
+    return;
+  }
+
+  frameStrip.innerHTML = "";
+  candidates.forEach((src, i) => {
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = `Background option ${i + 1}`;
+    if (i === 0) img.classList.add("selected");
+    img.addEventListener("click", () => {
+      frameStrip.querySelectorAll("img").forEach((f) => f.classList.remove("selected"));
+      img.classList.add("selected");
+      setThumbImage(src);
+    });
+    frameStrip.appendChild(img);
+  });
+
+  const overlay = result.thumbnail_overlay || {};
+  if (overlay.text) overlayTextEl.value = overlay.text;
+  if (overlay.highlight) overlayHighlightEl.value = overlay.highlight;
+
+  thumbMaker.hidden = false;
+  // make sure the brand font is in before first paint
+  document.fonts.load("700 92px Octarine").finally(() => setThumbImage(candidates[0]));
+}
+
 // Pull the JSON object out of the model's text blocks
 function parseModelJson(data) {
   const text = (data.content || [])
@@ -890,6 +1123,8 @@ function renderResult(result, searchedPages = [], runMode = "story") {
     searchedEl.appendChild(li);
   }
   searchedBlock.hidden = searchedPages.length === 0;
+
+  setupThumbnail(result);
 
   sourcesPanel.hidden = false;
   resultsEl.hidden = false;
