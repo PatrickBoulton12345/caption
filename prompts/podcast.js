@@ -52,5 +52,6 @@ Return ONLY a single JSON object, no markdown fences, no preamble. Schema:
     { "claim": "the specific load-bearing claim", "tier": "bulletproof | solid | softest", "source": "publisher + what it says + link if available" }
   ],
   "thumbnail_prompt": "the complete ready-to-paste Gemini prompt as one string",
-  "thumbnail_overlay": { "text": "4–9 word uppercase cover line from the episode's most arresting claim, ends with a full stop", "highlight": "the 1–3 contiguous words to colour red" }
+  "thumbnail_overlay": { "text": "4–9 word uppercase cover line from the episode's most arresting claim, ends with a full stop", "highlight": "the 1–3 contiguous words to colour red" },
+  "image_search_terms": ["2–3 short, specific image-search queries — the exact places, people or objects the episode is about"]
 }`;

@@ -435,6 +435,7 @@ textarea:focus, input[type="text"]:focus {
   flex-shrink: 0;
 }
 .frame-strip img.selected { outline: 3px solid var(--orange); opacity: 1; }
+.frame-strip img.web { border-color: var(--blue); border-width: 3px; }
 
 .swatches { display: flex; gap: 8px; margin-top: 10px; }
 .swatches .swatch {

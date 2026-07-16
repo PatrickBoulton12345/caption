@@ -95,7 +95,8 @@ Return ONLY a single JSON object, no markdown fences, no preamble. Schema:
   "sourcing_notes": [
     { "claim": "the specific load-bearing claim", "tier": "bulletproof | solid | softest", "source": "publisher + what it says + link if available" }
   ],
-  "thumbnail_overlay": { "text": "THE COUNCIL CAN'T BE BOTHERED. WE ARE.", "highlight": "BOTHERED" }
+  "thumbnail_overlay": { "text": "THE COUNCIL CAN'T BE BOTHERED. WE ARE.", "highlight": "BOTHERED" },
+  "image_search_terms": ["Mechanics Institute Swindon", "Isambard Kingdom Brunel portrait"]
 }
 
 - thumbnail_overlay: the text overlaid on the video's cover image, in the LFG
@@ -106,6 +107,11 @@ Return ONLY a single JSON object, no markdown fences, no preamble. Schema:
   Good patterns: "THEY WON'T RELEASE THIS DATA." (highlight "WON'T RELEASE"),
   "OUR NIGHTLIFE IS SUFFERING." (highlight "SUFFERING"), "WHY CAN'T WE HAVE
   NICE THINGS?" Always include this field.
+- image_search_terms: 2–3 short, specific image-search queries for finding a
+  striking related photo for the thumbnail — the exact places, people,
+  buildings or objects the material is about (e.g. "Hammersmith Bridge",
+  "Ed Miliband", "HS2 construction site"). Specific beats generic. Always
+  include this field.
 
 - suggested_hashtags: 4–6 tags. Always relevant to the topic. Mix evergreen reach tags
   (#fyp, #uk) with 1–3 topical ones. Lowercase, no spaces, no #LFG.

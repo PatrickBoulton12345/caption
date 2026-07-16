@@ -984,31 +984,67 @@ downloadThumbBtn.addEventListener("click", () => {
 
 // Called after each generation: frames from the video (or uploaded images)
 // become background candidates; Claude's suggested line + red words prefill.
+function addStripOption(src, { title = "", web = false, select = false } = {}) {
+  const img = document.createElement("img");
+  img.src = src;
+  img.alt = title || "Background option";
+  img.title = title;
+  if (web) img.classList.add("web");
+  if (select) img.classList.add("selected");
+  img.addEventListener("click", () => {
+    frameStrip.querySelectorAll("img").forEach((f) => f.classList.remove("selected"));
+    img.classList.add("selected");
+    setThumbImage(src);
+  });
+  img.addEventListener("error", () => img.remove()); // drop broken web images
+  frameStrip.appendChild(img);
+  return img;
+}
+
+// Pull in related photos from Wikimedia Commons for the search terms Claude
+// suggested; they join the strip with a blue edge.
+async function addWebImages(terms) {
+  const seen = new Set();
+  for (const term of terms.slice(0, 2)) {
+    try {
+      const r = await fetch(`/api/image-search?q=${encodeURIComponent(term)}`);
+      const d = await r.json();
+      if (!r.ok) continue;
+      for (const im of (d.images || []).slice(0, 4)) {
+        if (seen.has(im.url)) continue;
+        seen.add(im.url);
+        const proxied = `/api/image-proxy?url=${encodeURIComponent(im.url)}`;
+        addStripOption(proxied, { title: im.title, web: true });
+        // nothing local to show? auto-select the first web photo
+        if (!thumbImage && seen.size === 1) {
+          frameStrip.querySelector("img")?.classList.add("selected");
+          setThumbImage(proxied);
+        }
+      }
+    } catch {
+      /* a failed search just means fewer options */
+    }
+  }
+}
+
 function setupThumbnail(result) {
   const frames = lastRun?.payload?.frames || [];
   const candidates = [
     ...frames.map((b64) => "data:image/jpeg;base64," + b64),
     ...currentImages.map((im) => im.dataUrl),
   ];
+  const searchTerms = Array.isArray(result.image_search_terms)
+    ? result.image_search_terms.filter((t) => typeof t === "string" && t)
+    : [];
 
-  if (!candidates.length) {
+  if (!candidates.length && !searchTerms.length) {
     thumbMaker.hidden = true;
     return;
   }
 
   frameStrip.innerHTML = "";
-  candidates.forEach((src, i) => {
-    const img = document.createElement("img");
-    img.src = src;
-    img.alt = `Background option ${i + 1}`;
-    if (i === 0) img.classList.add("selected");
-    img.addEventListener("click", () => {
-      frameStrip.querySelectorAll("img").forEach((f) => f.classList.remove("selected"));
-      img.classList.add("selected");
-      setThumbImage(src);
-    });
-    frameStrip.appendChild(img);
-  });
+  thumbImage = null;
+  candidates.forEach((src, i) => addStripOption(src, { select: i === 0 }));
 
   const overlay = result.thumbnail_overlay || {};
   if (overlay.text) overlayTextEl.value = overlay.text;
@@ -1016,7 +1052,11 @@ function setupThumbnail(result) {
 
   thumbMaker.hidden = false;
   // make sure the brand font is in before first paint
-  document.fonts.load("700 92px Octarine").finally(() => setThumbImage(candidates[0]));
+  document.fonts.load("700 92px Octarine").finally(() => {
+    if (candidates.length) setThumbImage(candidates[0]);
+  });
+
+  if (searchTerms.length) addWebImages(searchTerms);
 }
 
 // Pull the JSON object out of the model's text blocks
