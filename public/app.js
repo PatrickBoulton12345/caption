@@ -374,10 +374,29 @@ const progress = {
     };
     tick();
   },
+  // never stalls: keeps inching toward `to`, with a live elapsed clock —
+  // for stages whose length we can't know in advance
+  crawl(from, to, tau, label) {
+    cancelAnimationFrame(this.raf);
+    const start = performance.now();
+    const tick = () => {
+      const el = performance.now() - start;
+      const frac = to - (to - from) * Math.exp(-el / Math.max(tau, 10000));
+      this.set(frac, label(Math.floor(el / 1000)));
+      this.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  },
   stop() {
     cancelAnimationFrame(this.raf);
   },
 };
+
+function fmtClock(totalSec) {
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return m ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`;
+}
 
 // ----- video pipeline: audio out in the browser, Whisper on Cloudflare -----
 // The browser pulls the audio track out of the file, slices it into 5-minute
@@ -688,8 +707,8 @@ generateBtn.addEventListener("click", async () => {
 
     const base = videoFile ? 0.75 : 0;
     const eta = getEta(runMode);
-    progress.creep(base, 0.96, eta, (s) =>
-      videoFile ? "writing the caption…" : `~${s}s remaining`
+    progress.crawl(base, 0.97, eta, (s) =>
+      `writing the caption… ${fmtClock(s)} (three options + fact-checking — a few minutes is normal)`
     );
 
     const capStart = performance.now();
@@ -799,7 +818,9 @@ async function sendFeedback() {
   generateBtn.disabled = true;
   progressEl.hidden = false;
   startLightShow();
-  progress.creep(0, 0.95, getEta(lastRun.runMode), () => "rewriting with your note…");
+  progress.crawl(0, 0.95, getEta(lastRun.runMode), (s) =>
+    `rewriting with your note… ${fmtClock(s)}`
+  );
 
   try {
     const payload = {
