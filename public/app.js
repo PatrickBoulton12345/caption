@@ -547,8 +547,11 @@ function grabFrames(file, n = 8) {
         const d = v.duration;
         const count = d < 60 ? Math.min(n, 5) : n;
         const frames = [];
-        for (let i = 0; i < count; i++) {
-          const t = d * (0.05 + (0.9 * i) / Math.max(1, count - 1));
+        const darkFrames = []; // fallback if the whole video is dark
+        // sample a few extra moments so near-black frames (fades) can be skipped
+        const attempts = count + 4;
+        for (let i = 0; i < attempts && frames.length < count; i++) {
+          const t = d * (0.04 + (0.92 * i) / Math.max(1, attempts - 1));
           await new Promise((res) => {
             v.onseeked = res;
             v.currentTime = t;
@@ -557,9 +560,25 @@ function grabFrames(file, n = 8) {
           const scale = Math.min(1, 1024 / (v.videoWidth || 1024));
           c.width = Math.max(1, Math.round(v.videoWidth * scale));
           c.height = Math.max(1, Math.round(v.videoHeight * scale));
-          c.getContext("2d").drawImage(v, 0, 0, c.width, c.height);
-          frames.push(c.toDataURL("image/jpeg", 0.75).split(",")[1]);
+          const cctx = c.getContext("2d");
+          cctx.drawImage(v, 0, 0, c.width, c.height);
+
+          // average brightness from a small sample
+          const s = document.createElement("canvas");
+          s.width = 16;
+          s.height = 16;
+          const sctx = s.getContext("2d");
+          sctx.drawImage(c, 0, 0, 16, 16);
+          const px = sctx.getImageData(0, 0, 16, 16).data;
+          let sum = 0;
+          for (let k = 0; k < px.length; k += 4) sum += (px[k] + px[k + 1] + px[k + 2]) / 3;
+          const brightness = sum / (px.length / 4);
+
+          const b64 = c.toDataURL("image/jpeg", 0.75).split(",")[1];
+          if (brightness > 18) frames.push(b64);
+          else darkFrames.push(b64);
         }
+        while (frames.length < count && darkFrames.length) frames.push(darkFrames.shift());
         URL.revokeObjectURL(v.src);
         resolve(frames);
       } catch {
