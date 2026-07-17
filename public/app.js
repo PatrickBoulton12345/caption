@@ -1003,9 +1003,12 @@ function addStripOption(src, { title = "", web = false, select = false } = {}) {
 
 // Pull in related photos from Wikimedia Commons for the search terms Claude
 // suggested; they join the strip with a blue edge.
+const webStatusEl = $("web-status");
+
 async function addWebImages(terms) {
   const seen = new Set();
-  for (const term of terms.slice(0, 2)) {
+  webStatusEl.textContent = "looking for related photos from the web…";
+  for (const term of terms.slice(0, 3)) {
     try {
       const r = await fetch(`/api/image-search?q=${encodeURIComponent(term)}`);
       const d = await r.json();
@@ -1017,14 +1020,18 @@ async function addWebImages(terms) {
         addStripOption(proxied, { title: im.title, web: true });
         // nothing local to show? auto-select the first web photo
         if (!thumbImage && seen.size === 1) {
-          frameStrip.querySelector("img")?.classList.add("selected");
+          frameStrip.querySelector("img.web")?.classList.add("selected");
           setThumbImage(proxied);
         }
       }
+      if (seen.size >= 8) break;
     } catch {
       /* a failed search just means fewer options */
     }
   }
+  webStatusEl.textContent = seen.size
+    ? `blue-edged photos are from the web (searched: ${terms.slice(0, 3).join(" · ")})`
+    : "no related web photos found for this one — the frames above still work.";
 }
 
 function setupThumbnail(result) {
@@ -1056,6 +1063,7 @@ function setupThumbnail(result) {
     if (candidates.length) setThumbImage(candidates[0]);
   });
 
+  webStatusEl.textContent = "";
   if (searchTerms.length) addWebImages(searchTerms);
 }
 
