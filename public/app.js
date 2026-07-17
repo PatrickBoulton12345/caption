@@ -1071,12 +1071,13 @@ const webStatusEl = $("web-status");
 async function addWebImages(terms) {
   const seen = new Set();
   webStatusEl.textContent = "looking for related photos from the web…";
-  for (const term of terms.slice(0, 3)) {
+
+  async function searchOne(term, perTerm) {
     try {
       const r = await fetch(`/api/image-search?q=${encodeURIComponent(term)}`);
       const d = await r.json();
-      if (!r.ok) continue;
-      for (const im of (d.images || []).slice(0, 4)) {
+      if (!r.ok) return;
+      for (const im of (d.images || []).slice(0, perTerm)) {
         if (seen.has(im.url)) continue;
         seen.add(im.url);
         const proxied = `/api/image-proxy?url=${encodeURIComponent(im.url)}`;
@@ -1087,14 +1088,31 @@ async function addWebImages(terms) {
           setThumbImage(proxied);
         }
       }
-      if (seen.size >= 8) break;
     } catch {
       /* a failed search just means fewer options */
     }
   }
+
+  const tried = [];
+  for (const term of terms.slice(0, 3)) {
+    tried.push(term);
+    await searchOne(term, 4);
+    if (seen.size >= 8) break;
+  }
+  // specific terms found nothing? broaden them and try once more
+  if (seen.size < 3) {
+    for (const term of terms.slice(0, 3)) {
+      const broad = term.split(/\s+/).slice(0, 2).join(" ");
+      if (!broad || tried.includes(broad)) continue;
+      tried.push(broad);
+      await searchOne(broad, 3);
+      if (seen.size >= 8) break;
+    }
+  }
+
   webStatusEl.textContent = seen.size
-    ? `blue-edged photos are from the web (searched: ${terms.slice(0, 3).join(" · ")})`
-    : "no related web photos found for this one — the frames above still work.";
+    ? `blue-edged photos are from the web (searched: ${tried.join(" · ")})`
+    : "no related web photos found for this one — the frames above still work, or use another image below.";
 }
 
 function setupThumbnail(result) {
