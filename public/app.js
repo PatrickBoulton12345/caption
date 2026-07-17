@@ -418,9 +418,11 @@ async function extractAudioInt16(file) {
     decoded = await ctx.decodeAudioData(buf);
   } catch {
     ctx.close();
-    throw new Error(
-      "Couldn't read the audio from that file — try exporting it as MP4 (H.264 + AAC) and drop it in again."
-    );
+    buf = null;
+    // Some containers — notably QuickTime .mov — can't be demuxed by
+    // decodeAudioData even when the browser plays them perfectly well. Fall
+    // back to playing the file and capturing its audio off the media graph.
+    return extractAudioViaPlayback(file);
   } finally {
     buf = null; // let the browser reclaim the raw file bytes
   }
@@ -433,21 +435,108 @@ async function extractAudioInt16(file) {
     mono = Float32Array.from(mono, (v, i) => (v + ch1[i]) / 2);
   }
 
-  // resample if the browser didn't honour the 16 kHz request
-  if (decoded.sampleRate !== 16000) {
-    const ratio = decoded.sampleRate / 16000;
+  return floatToInt16At16k(mono, decoded.sampleRate);
+}
+
+// Mono Float32 at `sampleRate` → 16 kHz 16-bit — halves memory + upload size,
+// and matches what Whisper wants.
+function floatToInt16At16k(mono, sampleRate) {
+  // resample if we're not already at 16 kHz
+  if (sampleRate !== 16000) {
+    const ratio = sampleRate / 16000;
     const out = new Float32Array(Math.floor(mono.length / ratio));
     for (let i = 0; i < out.length; i++) out[i] = mono[Math.floor(i * ratio)];
     mono = out;
   }
-
-  // 32-bit float → 16-bit — halves the memory and the upload size
   const samples = new Int16Array(mono.length);
   for (let i = 0; i < mono.length; i++) {
     const s = Math.max(-1, Math.min(1, mono[i]));
     samples[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
   }
   return samples;
+}
+
+// Fallback audio extraction: play the file through a hidden media element and
+// capture the samples off the Web Audio graph. This works for anything the
+// browser can PLAY but decodeAudioData can't demux — most importantly .mov
+// (QuickTime). It runs at real-time playback speed, so it's the slow path and
+// only kicks in when the fast decode above has already failed.
+async function extractAudioViaPlayback(file) {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  const ctx = new Ctx(); // let the browser pick its native rate; we resample after
+  const url = URL.createObjectURL(file);
+  const el = document.createElement("video");
+  el.src = url;
+  el.playsInline = true;
+  el.muted = false; // a muted element feeds silence to the graph — keep it live
+
+  const cleanup = () => {
+    try { ctx.close(); } catch {}
+    URL.revokeObjectURL(url);
+  };
+  const fail = () =>
+    new Error(
+      "Couldn't read the audio from that file — try exporting it as MP4 (H.264 + AAC) and drop it in again."
+    );
+
+  try {
+    await new Promise((res, rej) => {
+      el.onloadedmetadata = res;
+      el.onerror = rej;
+    });
+
+    const src = ctx.createMediaElementSource(el);
+    const proc = ctx.createScriptProcessor(16384, 2, 1);
+    // route through a silent gain so the ScriptProcessor keeps pumping without
+    // any sound reaching the speakers
+    const mute = ctx.createGain();
+    mute.gain.value = 0;
+
+    const chunks = [];
+    proc.onaudioprocess = (e) => {
+      const inBuf = e.inputBuffer;
+      const n = inBuf.length;
+      const ch0 = inBuf.getChannelData(0);
+      if (inBuf.numberOfChannels > 1) {
+        const ch1 = inBuf.getChannelData(1);
+        const mix = new Float32Array(n);
+        for (let i = 0; i < n; i++) mix[i] = (ch0[i] + ch1[i]) / 2;
+        chunks.push(mix);
+      } else {
+        chunks.push(ch0.slice());
+      }
+    };
+
+    src.connect(proc);
+    proc.connect(mute);
+    mute.connect(ctx.destination);
+
+    await ctx.resume();
+    await el.play();
+    await new Promise((res, rej) => {
+      el.onended = res;
+      el.onerror = rej;
+    });
+
+    proc.disconnect();
+    src.disconnect();
+    mute.disconnect();
+
+    // stitch the captured chunks into one mono buffer
+    let total = 0;
+    for (const c of chunks) total += c.length;
+    const mono = new Float32Array(total);
+    let off = 0;
+    for (const c of chunks) { mono.set(c, off); off += c.length; }
+
+    const rate = ctx.sampleRate;
+    cleanup();
+    if (!total) throw fail();
+    return floatToInt16At16k(mono, rate);
+  } catch (e) {
+    cleanup();
+    throw e && e.message && e.message.startsWith("Couldn't read") ? e : fail();
+  }
 }
 
 // Wrap 16-bit samples in a standard WAV header
