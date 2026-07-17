@@ -1131,13 +1131,10 @@ function showError(msg) {
 // ---------------------------------------------------------------------------
 // Render results
 // ---------------------------------------------------------------------------
-function renderResult(result, searchedPages = [], runMode = "story") {
-  currentTopic = result.topic || "other";
-  hashtagsAdded = false;
-
-  // Instagram-ready spacing: if the caption arrived as one blob, break it
-  // into short paragraphs (every couple of sentences) with blank lines
-  let caption = (result.caption || "").trim();
+// Instagram-ready spacing: if a caption arrives as one blob, break it into
+// short paragraphs (every couple of sentences) with blank lines
+function formatCaption(text) {
+  let caption = (text || "").trim();
   if (caption && !caption.includes("\n")) {
     const sentences = caption.split(/(?<=[.!?])\s+/);
     const paras = [];
@@ -1146,7 +1143,47 @@ function renderResult(result, searchedPages = [], runMode = "story") {
     }
     caption = paras.join("\n\n");
   }
-  captionEl.value = caption;
+  return caption;
+}
+
+// ----- caption options: three takes, buttons to flip between them -----
+const captionOptionsEl = $("caption-options");
+let captionOptions = [];
+let captionIdx = 0;
+
+function renderCaptionOptionButtons() {
+  captionOptionsEl.innerHTML = "";
+  if (captionOptions.length < 2) return;
+  captionOptions.forEach((_, i) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cap-opt" + (i === captionIdx ? " selected" : "");
+    btn.textContent = `option ${i + 1}`;
+    btn.addEventListener("click", () => {
+      captionOptions[captionIdx] = captionEl.value; // keep any edits
+      captionIdx = i;
+      captionEl.value = captionOptions[i];
+      hashtagsAdded = /\n\n#/.test(captionEl.value);
+      captionOptionsEl
+        .querySelectorAll(".cap-opt")
+        .forEach((b, k) => b.classList.toggle("selected", k === i));
+    });
+    captionOptionsEl.appendChild(btn);
+  });
+}
+
+function renderResult(result, searchedPages = [], runMode = "story") {
+  currentTopic = result.topic || "other";
+  hashtagsAdded = false;
+
+  const rawOptions =
+    Array.isArray(result.caption_options) && result.caption_options.length
+      ? result.caption_options.filter((c) => typeof c === "string" && c.trim())
+      : [result.caption || ""];
+  captionOptions = rawOptions.map(formatCaption);
+  captionIdx = 0;
+  captionEl.value = captionOptions[0];
+  renderCaptionOptionButtons();
   topicBadge.textContent = currentTopic;
 
   // Podcast extras: the explainer (for writing the title) + Gemini thumbnail prompt

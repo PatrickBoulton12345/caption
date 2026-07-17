@@ -90,7 +90,8 @@ Return ONLY a single JSON object, no markdown fences, no preamble. Schema:
 
 {
   "topic": "energy | housing | infrastructure | planning | nightlife | jobs | other",
-  "caption": "the full caption body ending with the call-to-action line, NO hashtags",
+  "caption": "your best caption — identical to the first entry of caption_options",
+  "caption_options": ["caption 1", "caption 2", "caption 3"],
   "suggested_hashtags": ["#fyp", "#uk", "#genz", "#housing", "#ukpoliticsmemes"],
   "sourcing_notes": [
     { "claim": "the specific load-bearing claim", "tier": "bulletproof | solid | softest", "source": "publisher + what it says + link if available" }
@@ -113,6 +114,12 @@ Return ONLY a single JSON object, no markdown fences, no preamble. Schema:
   "Ed Miliband", "HS2 construction site"). Specific beats generic. Always
   include this field.
 
+- caption_options: EXACTLY 3 complete, publish-ready captions, each fully in
+  the house style (length, paragraphs, triad, call to action — everything).
+  Make them genuinely different takes, not rewordings: a different opening
+  hook (different stat or fact), a different emotional register (e.g. one
+  deadpan, one exasperated, one darkly funny), or a different angle on the
+  same story. Your best one goes first and is repeated in "caption".
 - suggested_hashtags: 4–6 tags. Always relevant to the topic. Mix evergreen reach tags
   (#fyp, #uk) with 1–3 topical ones. Lowercase, no spaces, no #LFG.
 - sourcing_notes tiers: "bulletproof" = primary/official and unambiguous;

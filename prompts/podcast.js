@@ -46,7 +46,8 @@ Return ONLY a single JSON object, no markdown fences, no preamble. Schema:
   "topic": "energy | housing | infrastructure | planning | nightlife | jobs | other",
   "about": "3-5 sentences: who the guest is and what the episode is about, plain English",
   "why_it_matters": "3-5 sentences: the news hook, the stakes, what is surprising — written to help the user title and frame the episode",
-  "caption": "the full caption body ending with the call-to-action line, NO hashtags",
+  "caption": "your best caption — identical to the first entry of caption_options",
+  "caption_options": ["3 genuinely different complete captions: different hooks, different registers"],
   "suggested_hashtags": ["#fyp", "#uk", "#podcast", "..."],
   "sourcing_notes": [
     { "claim": "the specific load-bearing claim", "tier": "bulletproof | solid | softest", "source": "publisher + what it says + link if available" }

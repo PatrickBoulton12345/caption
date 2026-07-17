@@ -137,7 +137,7 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           model: "claude-sonnet-5",
-          max_tokens: 4000,
+          max_tokens: 8000,
           system,
           messages,
           // Server-side web search — Anthropic runs the searches.

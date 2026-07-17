@@ -358,6 +358,23 @@ textarea:focus, input[type="text"]:focus {
   color: var(--orange);
 }
 
+/* Caption options */
+.cap-options { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.cap-options:empty { display: none; }
+.cap-opt {
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-transform: lowercase;
+  border: 2px solid var(--black);
+  background: #fff;
+  padding: 6px 14px;
+  cursor: pointer;
+  border-radius: 999px;
+}
+.cap-opt.selected { background: var(--black); color: var(--cream); }
+.cap-opt:not(.selected):hover { background: var(--yellow); }
+
 /* Topic badge */
 .topic-badge {
   display: inline-block;
