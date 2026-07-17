@@ -588,12 +588,35 @@ function grabFrames(file, n = 8) {
   });
 }
 
+// Read a media file's duration (seconds) without decoding it
+function mediaDuration(file) {
+  return new Promise((resolve) => {
+    const v = document.createElement("video");
+    v.preload = "metadata";
+    v.src = URL.createObjectURL(file);
+    v.onloadedmetadata = () => {
+      URL.revokeObjectURL(v.src);
+      resolve(v.duration || 0);
+    };
+    v.onerror = () => resolve(0);
+  });
+}
+
 // Full pipeline: returns { transcript, frames }
 async function processVideo(file) {
-  const MAX_BYTES = 700 * 1024 * 1024;
+  // the browser has to unpack the audio in memory, so the real limit is
+  // length, not Cloudflare (which transcribes hours for pennies)
+  const MAX_BYTES = 1536 * 1024 * 1024; // 1.5 GB on disk
+  const MAX_MINUTES = 180; // 3 hours of audio
   if (file.size > MAX_BYTES) {
     throw new Error(
-      "That file is over 700 MB — export a smaller version (720p is plenty) and drop it in again."
+      "That file is over 1.5 GB — export a smaller version (720p is plenty), or drop in the audio-only export (M4A/MP3), which is tiny."
+    );
+  }
+  const durationMin = (await mediaDuration(file)) / 60;
+  if (durationMin > MAX_MINUTES) {
+    throw new Error(
+      `That's ${Math.round(durationMin)} minutes — over the 3-hour limit the browser can unpack in one go. Split the episode or process it in halves.`
     );
   }
 

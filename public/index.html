@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700;9..40,900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="octarine.css" />
-  <link rel="stylesheet" href="styles.css?v=19" />
+  <link rel="stylesheet" href="styles.css?v=20" />
 </head>
 <body>
   <!-- Generating light show: colour cascade + glows + pattern (visible only while working) -->
@@ -67,7 +67,7 @@
       <!-- ===== PODCAST MODE ===== -->
       <div id="podcast-panel" hidden>
         <section class="card drop-card" id="podcast-drop-card">
-          <label class="label" for="podcast-video">episode video <span class="optional">(click or drag &amp; drop — up to ~700&nbsp;mb)</span></label>
+          <label class="label" for="podcast-video">episode video or audio <span class="optional">(click or drag &amp; drop — up to 1.5&nbsp;gb / 3&nbsp;hours; for marathon episodes the audio-only export is best)</span></label>
           <div class="upload-row">
             <input type="file" id="podcast-video" accept="video/*,audio/*" hidden />
             <button type="button" id="pick-podcast-video" class="btn btn-ghost">choose video</button>
@@ -206,6 +206,6 @@
     </aside>
   </div>
 
-  <script src="app.js?v=19"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>
